@@ -11,7 +11,11 @@ def serve():
     server.add_insecure_port("[::]:50051")
     server.start()
     print("[manager] listening on port 50051")
-    server.wait_for_termination()
+    try:
+        server.wait_for_termination()
+    except KeyboardInterrupt:
+        print("[manager] received interrupt signal")
+        server.stop(grace=2)
 
 if __name__ == "__main__":
     serve()
