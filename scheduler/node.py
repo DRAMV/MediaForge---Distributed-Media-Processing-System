@@ -1,9 +1,16 @@
+import uuid
 from concurrent import futures
 import grpc
 from protos import farm_pb2_grpc
 
 class Manager(farm_pb2_grpc.ManagerServicer):
-    pass
+    def UploadVideo(self, request, context):
+        job_id = "J-" + uuid.uuid4().hex[:8]
+        print(f"[manager] H2 got video job={job_id} "
+              f"file={request.filename} bytes={len(request.data)}")
+        return farm_pb2.UploadReply(
+            job_id=job_id, data=b"", detail="received (worker not connected yet)"
+        )
 
 def serve():
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
