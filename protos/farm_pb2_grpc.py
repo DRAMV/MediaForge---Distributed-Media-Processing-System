@@ -5,7 +5,7 @@ import warnings
 
 from protos import farm_pb2 as farm__pb2
 
-GRPC_GENERATED_VERSION = '1.68.1'
+GRPC_GENERATED_VERSION = '1.85.1'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -18,16 +18,15 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + f' but the generated code in farm_pb2_grpc.py depends on'
+        + ' but the generated code in farm_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
     )
 
 
-class ManagerStub(object):
-    """---------- Client -> Manager  (step 1 and steps 8-9) ----------
-    """
+class ManagerStub:
+    """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
         """Constructor.
@@ -47,9 +46,8 @@ class ManagerStub(object):
                 _registered_method=True)
 
 
-class ManagerServicer(object):
-    """---------- Client -> Manager  (step 1 and steps 8-9) ----------
-    """
+class ManagerServicer:
+    """Missing associated documentation comment in .proto file."""
 
     def UploadVideo(self, request, context):
         """One call: upload in, finished result out (manager waits for the worker).
@@ -59,7 +57,7 @@ class ManagerServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def ReportResult(self, request, context):
-        """Worker -> Manager (steps 6-7): worker hands over the finished result.
+        """Worker hands over the finished result
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -86,9 +84,8 @@ def add_ManagerServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class Manager(object):
-    """---------- Client -> Manager  (step 1 and steps 8-9) ----------
-    """
+class Manager:
+    """Missing associated documentation comment in .proto file."""
 
     @staticmethod
     def UploadVideo(request,
@@ -145,8 +142,8 @@ class Manager(object):
             _registered_method=True)
 
 
-class WorkerStub(object):
-    """---------- Manager -> Worker  (steps 3-4) ----------
+class WorkerStub:
+    """Manager sends the job and then worker ACKs. works in background
     """
 
     def __init__(self, channel):
@@ -162,13 +159,12 @@ class WorkerStub(object):
                 _registered_method=True)
 
 
-class WorkerServicer(object):
-    """---------- Manager -> Worker  (steps 3-4) ----------
+class WorkerServicer:
+    """Manager sends the job and then worker ACKs. works in background
     """
 
     def SubmitJob(self, request, context):
-        """Manager sends the job; worker ACKs immediately, works in background.
-        """
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -189,8 +185,8 @@ def add_WorkerServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class Worker(object):
-    """---------- Manager -> Worker  (steps 3-4) ----------
+class Worker:
+    """Manager sends the job and then worker ACKs. works in background
     """
 
     @staticmethod
