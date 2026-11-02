@@ -1,0 +1,48 @@
+syntax = "proto3";
+package farm;
+
+service Manager{
+    // One call: upload in, finished result out (manager waits for the worker).
+    rpc UploadVideo(UploadRequest) returns (UploadReply);
+
+    // Worker hands over the finished result
+    rpc ReportResult(ResultReport) returns (ReportAck);
+}
+
+// Manager sends the job and then worker ACKs. works in background
+service Worker{
+    rpc SubmitJob(Job) returns (JobAck);
+}
+
+message UploadRequest {
+    string filename = 1; // ex:"myVideo.mp4"
+    bytes data = 2;
+}
+
+message UploadReply{
+    string job_id = 1;
+    bytes data = 2;
+    string detail = 3; // human-readable summary of what worker did
+}
+
+message Job {
+    string job_id = 1;
+    string filename = 2;
+    bytes data =3;
+}
+
+message JobAck {
+    string job_id = 1;
+    bool accepted = 2; // the worker's feedback
+}
+
+message ResultReport{
+    string job_id = 1;
+    bytes data = 2;
+    string detail = 3;
+}
+
+message ReportAck {
+    bool ok = 1;
+}
+
