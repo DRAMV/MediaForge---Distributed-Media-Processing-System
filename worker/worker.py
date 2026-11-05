@@ -3,15 +3,14 @@ import threading
 
 from concurrent import futures
 
-import farm_pb2
-import farm_pb2_grpc
-
-from processor import process_job
-from manager_client import report_result
+from protos import farm_pb2, farm_pb2_grpc
+from worker.processor import process_job
+from worker.manager_client import report_result
 
 
 MANAGER_ADDRESS = "localhost:50051"
 WORKER_PORT = 50052
+MAX_MSG = 64 * 1024 * 1024
 
 class WorkerService(farm_pb2_grpc.WorkerServicer):
     def SubmitJob(self, request, context):
@@ -49,7 +48,11 @@ class WorkerService(farm_pb2_grpc.WorkerServicer):
 def serve():
 
     server = grpc.server(
-        futures.ThreadPoolExecutor(max_workers=10)
+        futures.ThreadPoolExecutor(max_workers=10),
+        options=[
+            ("grpc.max_send_message_length", MAX_MSG),
+            ("grpc.max_receive_message_length", MAX_MSG),
+        ],
     )
 
     farm_pb2_grpc.add_WorkerServicer_to_server(
