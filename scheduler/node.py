@@ -5,6 +5,7 @@ import grpc
 from protos import farm_pb2, farm_pb2_grpc
 
 WORKER_ADDRESS = "localhost:50052"
+MAX_MSG = 64 * 1024 * 1024
 
 class Manager(farm_pb2_grpc.ManagerServicer):
     def __init__(self):
@@ -18,7 +19,7 @@ class Manager(farm_pb2_grpc.ManagerServicer):
         self.jobs[job_id] = {"done": threading.Event(), "result": None}
 
         print(f"[manager] H3 scheduling job={job_id} -> worker at {WORKER_ADDRESS}")
-        channel = grpc.insecure_channel(WORKER_ADDRESS)
+        channel = grpc.insecure_channel(WORKER_ADDRESS, options=[("grpc.max_send_message_length", MAX_MSG),("grpc.max_receive_message_length", MAX_MSG),])
         worker = farm_pb2_grpc.WorkerStub(channel)
         ack = worker.SubmitJob(
             farm_pb2.Job(job_id=job_id, filename=request.filename, data=request.data),
@@ -54,7 +55,7 @@ class Manager(farm_pb2_grpc.ManagerServicer):
         return farm_pb2.ReportAck(ok=True)
 
 def serve():
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10),options=[("grpc.max_send_message_length", MAX_MSG),("grpc.max_receive_message_length", MAX_MSG),],)
     farm_pb2_grpc.add_ManagerServicer_to_server(Manager(), server)
     server.add_insecure_port("[::]:50051")
     server.start()
