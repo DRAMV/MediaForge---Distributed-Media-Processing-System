@@ -21,6 +21,6 @@ def report_result(manager_address, job_id, data, details) :
     )
 
 
-    print(f"[Worker] Manager acknowledfed result: {response.ok}")
+    print(f"[Worker] Manager acknowledged result: {response.ok}")
 
     return response.ok
