@@ -44,6 +44,16 @@ class ManagerStub:
                 request_serializer=farm__pb2.ResultReport.SerializeToString,
                 response_deserializer=farm__pb2.ReportAck.FromString,
                 _registered_method=True)
+        self.Heartbeat = channel.unary_unary(
+                '/farm.Manager/Heartbeat',
+                request_serializer=farm__pb2.HeartbeatRequest.SerializeToString,
+                response_deserializer=farm__pb2.HeartbeatAck.FromString,
+                _registered_method=True)
+        self.ListWorkers = channel.unary_unary(
+                '/farm.Manager/ListWorkers',
+                request_serializer=farm__pb2.Empty.SerializeToString,
+                response_deserializer=farm__pb2.WorkerList.FromString,
+                _registered_method=True)
 
 
 class ManagerServicer:
@@ -63,6 +73,20 @@ class ManagerServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def Heartbeat(self, request, context):
+        """M3: workers ping the manager every few seconds so it can mark them ALIVE/DEAD.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListWorkers(self, request, context):
+        """M2/M4: dashboard + client can see the worker registry and its state.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_ManagerServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -75,6 +99,16 @@ def add_ManagerServicer_to_server(servicer, server):
                     servicer.ReportResult,
                     request_deserializer=farm__pb2.ResultReport.FromString,
                     response_serializer=farm__pb2.ReportAck.SerializeToString,
+            ),
+            'Heartbeat': grpc.unary_unary_rpc_method_handler(
+                    servicer.Heartbeat,
+                    request_deserializer=farm__pb2.HeartbeatRequest.FromString,
+                    response_serializer=farm__pb2.HeartbeatAck.SerializeToString,
+            ),
+            'ListWorkers': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListWorkers,
+                    request_deserializer=farm__pb2.Empty.FromString,
+                    response_serializer=farm__pb2.WorkerList.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -131,6 +165,60 @@ class Manager:
             '/farm.Manager/ReportResult',
             farm__pb2.ResultReport.SerializeToString,
             farm__pb2.ReportAck.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def Heartbeat(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/farm.Manager/Heartbeat',
+            farm__pb2.HeartbeatRequest.SerializeToString,
+            farm__pb2.HeartbeatAck.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListWorkers(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/farm.Manager/ListWorkers',
+            farm__pb2.Empty.SerializeToString,
+            farm__pb2.WorkerList.FromString,
             options,
             channel_credentials,
             insecure,

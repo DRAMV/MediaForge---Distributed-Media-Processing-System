@@ -24,27 +24,37 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\nfarm.proto\x12\x04\x66\x61rm\"/\n\rUploadRequest\x12\x10\n\x08\x66ilename\x18\x01 \x01(\t\x12\x0c\n\x04\x64\x61ta\x18\x02 \x01(\x0c\";\n\x0bUploadReply\x12\x0e\n\x06job_id\x18\x01 \x01(\t\x12\x0c\n\x04\x64\x61ta\x18\x02 \x01(\x0c\x12\x0e\n\x06\x64\x65tail\x18\x03 \x01(\t\"5\n\x03Job\x12\x0e\n\x06job_id\x18\x01 \x01(\t\x12\x10\n\x08\x66ilename\x18\x02 \x01(\t\x12\x0c\n\x04\x64\x61ta\x18\x03 \x01(\x0c\"*\n\x06JobAck\x12\x0e\n\x06job_id\x18\x01 \x01(\t\x12\x10\n\x08\x61\x63\x63\x65pted\x18\x02 \x01(\x08\"<\n\x0cResultReport\x12\x0e\n\x06job_id\x18\x01 \x01(\t\x12\x0c\n\x04\x64\x61ta\x18\x02 \x01(\x0c\x12\x0e\n\x06\x64\x65tail\x18\x03 \x01(\t\"\x17\n\tReportAck\x12\n\n\x02ok\x18\x01 \x01(\x08\x32u\n\x07Manager\x12\x35\n\x0bUploadVideo\x12\x13.farm.UploadRequest\x1a\x11.farm.UploadReply\x12\x33\n\x0cReportResult\x12\x12.farm.ResultReport\x1a\x0f.farm.ReportAck2.\n\x06Worker\x12$\n\tSubmitJob\x12\t.farm.Job\x1a\x0c.farm.JobAckb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\nfarm.proto\x12\x04\x66\x61rm\"\x07\n\x05\x45mpty\"B\n\rUploadRequest\x12\x10\n\x08\x66ilename\x18\x01 \x01(\t\x12\x0c\n\x04\x64\x61ta\x18\x02 \x01(\x0c\x12\x11\n\ttask_type\x18\x03 \x01(\t\"_\n\x0bUploadReply\x12\x0e\n\x06job_id\x18\x01 \x01(\t\x12\x0c\n\x04\x64\x61ta\x18\x02 \x01(\x0c\x12\x0e\n\x06\x64\x65tail\x18\x03 \x01(\t\x12\x11\n\ttask_type\x18\x04 \x01(\t\x12\x0f\n\x07lamport\x18\x05 \x01(\x03\"j\n\x03Job\x12\x0e\n\x06job_id\x18\x01 \x01(\t\x12\x10\n\x08\x66ilename\x18\x02 \x01(\t\x12\x0c\n\x04\x64\x61ta\x18\x03 \x01(\x0c\x12\x11\n\ttask_type\x18\x04 \x01(\t\x12\x0f\n\x07lamport\x18\x05 \x01(\x03\x12\x0f\n\x07\x61ttempt\x18\x06 \x01(\x03\"N\n\x06JobAck\x12\x0e\n\x06job_id\x18\x01 \x01(\t\x12\x10\n\x08\x61\x63\x63\x65pted\x18\x02 \x01(\x08\x12\x11\n\tworker_id\x18\x03 \x01(\t\x12\x0f\n\x07lamport\x18\x04 \x01(\x03\"`\n\x0cResultReport\x12\x0e\n\x06job_id\x18\x01 \x01(\t\x12\x0c\n\x04\x64\x61ta\x18\x02 \x01(\x0c\x12\x0e\n\x06\x64\x65tail\x18\x03 \x01(\t\x12\x11\n\tworker_id\x18\x04 \x01(\t\x12\x0f\n\x07lamport\x18\x05 \x01(\x03\"\x17\n\tReportAck\x12\n\n\x02ok\x18\x01 \x01(\x08\"6\n\x10HeartbeatRequest\x12\x11\n\tworker_id\x18\x01 \x01(\t\x12\x0f\n\x07lamport\x18\x02 \x01(\x03\"+\n\x0cHeartbeatAck\x12\n\n\x02ok\x18\x01 \x01(\x08\x12\x0f\n\x07lamport\x18\x02 \x01(\x03\"X\n\nWorkerInfo\x12\x11\n\tworker_id\x18\x01 \x01(\t\x12\x0f\n\x07\x61\x64\x64ress\x18\x02 \x01(\t\x12\r\n\x05state\x18\x03 \x01(\t\x12\x17\n\x0flast_seen_epoch\x18\x04 \x01(\x03\"/\n\nWorkerList\x12!\n\x07workers\x18\x01 \x03(\x0b\x32\x10.farm.WorkerInfo2\xdc\x01\n\x07Manager\x12\x35\n\x0bUploadVideo\x12\x13.farm.UploadRequest\x1a\x11.farm.UploadReply\x12\x33\n\x0cReportResult\x12\x12.farm.ResultReport\x1a\x0f.farm.ReportAck\x12\x37\n\tHeartbeat\x12\x16.farm.HeartbeatRequest\x1a\x12.farm.HeartbeatAck\x12,\n\x0bListWorkers\x12\x0b.farm.Empty\x1a\x10.farm.WorkerList2.\n\x06Worker\x12$\n\tSubmitJob\x12\t.farm.Job\x1a\x0c.farm.JobAckb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'farm_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_UPLOADREQUEST']._serialized_start=20
-  _globals['_UPLOADREQUEST']._serialized_end=67
-  _globals['_UPLOADREPLY']._serialized_start=69
-  _globals['_UPLOADREPLY']._serialized_end=128
-  _globals['_JOB']._serialized_start=130
-  _globals['_JOB']._serialized_end=183
-  _globals['_JOBACK']._serialized_start=185
-  _globals['_JOBACK']._serialized_end=227
-  _globals['_RESULTREPORT']._serialized_start=229
-  _globals['_RESULTREPORT']._serialized_end=289
-  _globals['_REPORTACK']._serialized_start=291
-  _globals['_REPORTACK']._serialized_end=314
-  _globals['_MANAGER']._serialized_start=316
-  _globals['_MANAGER']._serialized_end=433
-  _globals['_WORKER']._serialized_start=435
-  _globals['_WORKER']._serialized_end=481
+  _globals['_EMPTY']._serialized_start=20
+  _globals['_EMPTY']._serialized_end=27
+  _globals['_UPLOADREQUEST']._serialized_start=29
+  _globals['_UPLOADREQUEST']._serialized_end=95
+  _globals['_UPLOADREPLY']._serialized_start=97
+  _globals['_UPLOADREPLY']._serialized_end=192
+  _globals['_JOB']._serialized_start=194
+  _globals['_JOB']._serialized_end=300
+  _globals['_JOBACK']._serialized_start=302
+  _globals['_JOBACK']._serialized_end=380
+  _globals['_RESULTREPORT']._serialized_start=382
+  _globals['_RESULTREPORT']._serialized_end=478
+  _globals['_REPORTACK']._serialized_start=480
+  _globals['_REPORTACK']._serialized_end=503
+  _globals['_HEARTBEATREQUEST']._serialized_start=505
+  _globals['_HEARTBEATREQUEST']._serialized_end=559
+  _globals['_HEARTBEATACK']._serialized_start=561
+  _globals['_HEARTBEATACK']._serialized_end=604
+  _globals['_WORKERINFO']._serialized_start=606
+  _globals['_WORKERINFO']._serialized_end=694
+  _globals['_WORKERLIST']._serialized_start=696
+  _globals['_WORKERLIST']._serialized_end=743
+  _globals['_MANAGER']._serialized_start=746
+  _globals['_MANAGER']._serialized_end=966
+  _globals['_WORKER']._serialized_start=968
+  _globals['_WORKER']._serialized_end=1014
 # @@protoc_insertion_point(module_scope)
