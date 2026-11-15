@@ -18,7 +18,7 @@ def run(job):
         )
 
     with tempfile.TemporaryDirectory(prefix="mediaforge-") as directory:
-        directory = pathlib.Pth(directory)
+        directory = pathlib.Path(directory)
         suffix = pathlib.Path(job.filename).suffix or ".mp4"
 
         source = directory / f"input{suffix}"
@@ -33,8 +33,9 @@ def run(job):
                 "-loglevel", "error",
                 "-y",
                 "-i", str(source),
-                "-franes:v", "1",
+                "-frames:v", "1",
                 "-vf", "scale=320:-1",
+                str(output),
             ],
             capture_output=True,
             timeout=20,

@@ -20,8 +20,8 @@ def run(job):
         )
 
     with tempfile.TemporaryDirectory(prefix="mediaforge-") as directory:
-        directory = pathlib.path(directory)
-        suffix = pathlib.path(job.filename).suffix or ".mp4"
+        directory = pathlib.Path(directory)
+        suffix = pathlib.Path(job.filename).suffix or ".mp4"
 
         source = directory / f"input{suffix}"
         output = directory / "output.mp4"
@@ -54,7 +54,7 @@ def run(job):
 
         return (
             output.read_bytes(),
-            "transcode: coverted video to H.264/AAC MP4",
+            "transcode: converted video to H.264/AAC MP4",
         )
 
                            
