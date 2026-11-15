@@ -10,6 +10,11 @@ def parse_args():
     p.add_argument("--manager", default="localhost:50051")
     p.add_argument("--out", default="results")
     p.add_argument("--timeout", type=float, default=60) #must exceed manager's 30s wait
+    p.add_argument(
+        "--task",
+        choices=("transcode", "thumbnail", "subtitles", "moderation"),
+        help="Task to perform; omit to let the manager choose",
+    )
     return p.parse_args()
 
 def main():
@@ -31,8 +36,11 @@ def main():
 
     try:
         reply = stub.UploadVideo(
-            farm_pb2.UploadRequest(filename=path.name, data=data),
-            timeout=args.timeout
+            farm_pb2.UploadRequest(
+                filename=path.name,
+                data=data,
+                task_type=args.task or "",
+            ),            timeout=args.timeout
         )
     except grpc.RpcError as e:
         sys.exit(f"[client] RPC failed: {e.code().name} - {e.details()}")
@@ -42,6 +50,13 @@ def main():
 
     out = pathlib.Path(args.out); out.mkdir(parents=True, exist_ok=True)
     out_path = out / f"{reply.job_id}_{path.name}"
+
+    if reply.detail.startswith("thumbnail: created"):
+        out_path = out_path.with_suffix(".jpg")
+    
+    elif reply.detail.startswith("transcode: converted"):
+        out_path = out_path.with_suffix(".mp4")
+    
     out_path.write_bytes(reply.data)
 
     print(f"[client] H9 job={reply.job_id} done in {time.time()-start:.1f}s: {reply.detail}")
