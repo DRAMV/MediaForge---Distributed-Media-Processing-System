@@ -43,6 +43,9 @@ MANAGER_PORT = _int("FARM_MANAGER_PORT", 50051)
 MANAGER_ADDRESS = _str("FARM_MANAGER_ADDRESS", f"localhost:{MANAGER_PORT}")
 WORKER_PORT = _int("FARM_WORKER_PORT", 50052)
 
+WORKER_CONCURRENCY = _int("FARM_WORKER_CONCURRENCY", 4)
+STATUS_PORT = _int("FARM_STATUS_PORT", 8080)
+
 # Who am I? Docker gives each container a unique hostname automatically.
 # Local run with 2 workers on one PC: start them with FARM_WORKER_ID=worker-1 / worker-2.
 WORKER_ID = _str("FARM_WORKER_ID", socket.gethostname())
