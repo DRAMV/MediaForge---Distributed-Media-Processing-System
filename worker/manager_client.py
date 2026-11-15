@@ -1,26 +1,29 @@
 import grpc
 
 from protos import farm_pb2, farm_pb2_grpc
+from common import config
 
+def report_result(manager_address, job_id, data, detail) :
 
-def report_result(manager_address, job_id, data, details) :
+    with grpc.insecure_channel(
+        manager_address,
+        options=config.CHANNEL_OPTIONS,
+    ) as channel:
+        stub = farm_pb2_grpc.ManagerStub(channel)
 
-    channel = grpc.insecure_channel(manager_address, options=[
-        ("grpc.max_send_message_length", 64 * 1024 * 1024),
-        ("grpc.max_receive_message_length", 64 * 1024 * 1024),
-    ])
-    
-    manager_stub = farm_pb2_grpc.ManagerStub(channel)
-
-    response = manager_stub.ReportResult(
-        farm_pb2.ResultReport(
-            job_id = job_id,
-            data = data,
-            detail = details
+        response = stub.ReportResult(
+            farm_pb2.ResultReport(
+                job_id = job_id,
+                data=data,
+                detail=detail,
+                worker_id=config.WORKER_ID,
+            ),
+            timeout=config.WORKER_ACK_TIMEOUT,
         )
+
+    print(
+        f"[worker:{config.WORKER_ID}]"
+        f"manager acknowledged job={job_id}: {response.ok}"
     )
-
-
-    print(f"[Worker] Manager acknowledged result: {response.ok}")
 
     return response.ok
