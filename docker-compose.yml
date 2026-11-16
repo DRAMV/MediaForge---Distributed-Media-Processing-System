@@ -1,0 +1,43 @@
+# docker-compose.yml  (M2)
+# One shared image (see Dockerfile) -> manager + workers + a client tool.
+#
+#   Start the farm:   docker compose up --build
+#   Upload a video:   docker compose run --rm client python -m client.client samples/video.mp4 --manager manager:50051
+#   Stop everything:  docker compose down
+
+x-farm: &farm
+  build: .
+  image: mediaforge
+
+services:
+  manager:
+    <<: *farm
+    command: python -m scheduler.node
+    environment:
+      FARM_WORKERS: worker-1:50052,worker-2:50052
+    ports:
+      - "50051:50051"
+
+  worker-1:
+    <<: *farm
+    command: python -m worker.worker
+    environment:
+      FARM_WORKER_ID: worker-1
+      FARM_MANAGER_ADDRESS: manager:50051
+
+  worker-2:
+    <<: *farm
+    command: python -m worker.worker
+    environment:
+      FARM_WORKER_ID: worker-2
+      FARM_MANAGER_ADDRESS: manager:50051
+
+  client:
+    <<: *farm
+    profiles: ["tools"]
+    command: python -m client.client --help
+    depends_on:
+      - manager
+    volumes:
+      - ./samples:/app/samples:ro
+      - ./results:/app/results
