@@ -3,6 +3,7 @@ import threading
 from concurrent import futures
 import grpc
 from protos import farm_pb2, farm_pb2_grpc
+from common import config
 
 WORKER_ADDRESS = "localhost:50052"
 MAX_MSG = 64 * 1024 * 1024
@@ -12,6 +13,19 @@ class Manager(farm_pb2_grpc.ManagerServicer):
         self.jobs = {}
 
     def UploadVideo(self, request, context):
+        task_type = request.task_type or next(
+            (
+                task
+                for task in config.TASK_TYPES
+                if task in request.filename.lower()
+            ),
+            config.DEFAULT_TASK,
+        )
+        if task_type not in config.TASK_TYPES:
+            context.abort(
+                grpc.StatusCode.INVALID_ARGUMENT,
+                f"Unknown task type: {task_type}",
+            )
         job_id = "J-" + uuid.uuid4().hex[:8]
         print(f"[manager] H2 got video job={job_id} "
               f"file={request.filename} bytes={len(request.data)}")
@@ -22,16 +36,28 @@ class Manager(farm_pb2_grpc.ManagerServicer):
         channel = grpc.insecure_channel(WORKER_ADDRESS, options=[("grpc.max_send_message_length", MAX_MSG),("grpc.max_receive_message_length", MAX_MSG),])
         worker = farm_pb2_grpc.WorkerStub(channel)
         ack = worker.SubmitJob(
-            farm_pb2.Job(job_id=job_id, filename=request.filename, data=request.data),
+            farm_pb2.Job(
+                job_id=job_id,
+                filename=request.filename,
+                data=request.data,
+                task_type=task_type,
+            ),
             timeout=5,
         )
-        print(f"[manager] H5 worker got job={job_id} (accepted={ack.accepted})")
+        print(
+            f"[manager] H5 worker={ack.worker_id} "
+            f"got job={job_id} task={task_type} "
+            f"(accepted={ack.accepted})"
+        )
 
         finished = self.jobs[job_id]["done"].wait(timeout=30)
         if not finished:
             self.jobs.pop(job_id, None)
             return farm_pb2.UploadReply(
-                job_id=job_id, data=b"", detail="timeout waiting for worker to finish job"
+                job_id=job_id,
+                data=b"",
+                detail="timeout waiting for worker to finish job",
+                task_type=task_type,
             )
 
         result = self.jobs.pop(job_id)["result"]
@@ -41,12 +67,19 @@ class Manager(farm_pb2_grpc.ManagerServicer):
             lambda: print(f"[manager] H9 delivered job={job_id} - happy path complete")
         )
         return farm_pb2.UploadReply(
-            job_id=job_id, data=result.data, detail=result.detail
+            job_id=job_id,
+            data=result.data,
+            detail=result.detail,
+            task_type=task_type,
         )
 
     def ReportResult(self, request, context):
-        print(f"[manager] H7 worker done job={request.job_id} "
-              f"bytes={len(request.data)}")
+        print(
+            f"[manager] H7 worker={request.worker_id} "
+            f"done job={request.job_id} "
+            f"bytes={len(request.data)} "
+            f"detail={request.detail}"
+        )
         job = self.jobs.get(request.job_id)
         if job is None:
             return farm_pb2.ReportAck(ok=False)
