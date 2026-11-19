@@ -82,6 +82,21 @@ LEASE_SECONDS = _float("FARM_LEASE_SECONDS", 15.0)            # M4: lease durati
 ENABLE_DEDUP = _bool("FARM_ENABLE_DEDUP", False)              # M4: same job_id processed once
 
 
+#-----------moderation and subs ------- (new additions start here)
+SUBTITLE_MODEL = _str("FARM_SUBTITLE_MODEL", "base")
+SUBTITLE_LANGUAGE = _str("FARM_SUBTITLE_LANGUAGE", "")
+
+MODERATION_MODEL = _str(
+    "FARM_MODERATION_MODEL",
+    "Falconsai/nsfw_image_detection",
+)
+
+MODERATION_THRESHOLD = _float("FARM_MODERATION_THRESHOLD", 0.80)
+MODERATION_INTERVAL = _float("FARM_MODERATION_INTERVAL", 2.0)
+MODERATION_MAX_SECONDS = _float("FARM_MODERATION_MAX_SECONDS", 120.0)
+
+#-----------moderation and subs ------- (new additions end here)
+
 def summary(component: str) -> str:
     """One dump for startup logs, e.g. print(config.summary('manager'))."""
     return (
