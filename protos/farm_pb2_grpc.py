@@ -5,7 +5,7 @@ import warnings
 
 from protos import farm_pb2 as farm__pb2
 
-GRPC_GENERATED_VERSION = '1.85.1'
+GRPC_GENERATED_VERSION = '1.80.1'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -25,7 +25,7 @@ if _version_not_supported:
     )
 
 
-class ManagerStub:
+class ManagerStub(object):
     """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
@@ -56,7 +56,7 @@ class ManagerStub:
                 _registered_method=True)
 
 
-class ManagerServicer:
+class ManagerServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def UploadVideo(self, request, context):
@@ -118,7 +118,7 @@ def add_ManagerServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class Manager:
+class Manager(object):
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
@@ -230,7 +230,7 @@ class Manager:
             _registered_method=True)
 
 
-class WorkerStub:
+class WorkerStub(object):
     """Manager sends the job and then worker ACKs. works in background
     """
 
@@ -247,7 +247,7 @@ class WorkerStub:
                 _registered_method=True)
 
 
-class WorkerServicer:
+class WorkerServicer(object):
     """Manager sends the job and then worker ACKs. works in background
     """
 
@@ -273,7 +273,7 @@ def add_WorkerServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class Worker:
+class Worker(object):
     """Manager sends the job and then worker ACKs. works in background
     """
 
@@ -294,6 +294,123 @@ class Worker:
             '/farm.Worker/SubmitJob',
             farm__pb2.Job.SerializeToString,
             farm__pb2.JobAck.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+
+class RaftStub(object):
+    """Missing associated documentation comment in .proto file."""
+
+    def __init__(self, channel):
+        """Constructor.
+
+        Args:
+            channel: A grpc.Channel.
+        """
+        self.RequestVote = channel.unary_unary(
+                '/farm.Raft/RequestVote',
+                request_serializer=farm__pb2.VoteRequest.SerializeToString,
+                response_deserializer=farm__pb2.VoteReply.FromString,
+                _registered_method=True)
+        self.AppendEntries = channel.unary_unary(
+                '/farm.Raft/AppendEntries',
+                request_serializer=farm__pb2.AppendEntriesRequest.SerializeToString,
+                response_deserializer=farm__pb2.AppendEntriesReply.FromString,
+                _registered_method=True)
+
+
+class RaftServicer(object):
+    """Missing associated documentation comment in .proto file."""
+
+    def RequestVote(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def AppendEntries(self, request, context):
+        """leader -> followers: replicate log entries AND serve as heartbeat.
+        An empty `entries` list = pure heartbeat, no new data.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+
+def add_RaftServicer_to_server(servicer, server):
+    rpc_method_handlers = {
+            'RequestVote': grpc.unary_unary_rpc_method_handler(
+                    servicer.RequestVote,
+                    request_deserializer=farm__pb2.VoteRequest.FromString,
+                    response_serializer=farm__pb2.VoteReply.SerializeToString,
+            ),
+            'AppendEntries': grpc.unary_unary_rpc_method_handler(
+                    servicer.AppendEntries,
+                    request_deserializer=farm__pb2.AppendEntriesRequest.FromString,
+                    response_serializer=farm__pb2.AppendEntriesReply.SerializeToString,
+            ),
+    }
+    generic_handler = grpc.method_handlers_generic_handler(
+            'farm.Raft', rpc_method_handlers)
+    server.add_generic_rpc_handlers((generic_handler,))
+    server.add_registered_method_handlers('farm.Raft', rpc_method_handlers)
+
+
+ # This class is part of an EXPERIMENTAL API.
+class Raft(object):
+    """Missing associated documentation comment in .proto file."""
+
+    @staticmethod
+    def RequestVote(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/farm.Raft/RequestVote',
+            farm__pb2.VoteRequest.SerializeToString,
+            farm__pb2.VoteReply.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def AppendEntries(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/farm.Raft/AppendEntries',
+            farm__pb2.AppendEntriesRequest.SerializeToString,
+            farm__pb2.AppendEntriesReply.FromString,
             options,
             channel_credentials,
             insecure,
