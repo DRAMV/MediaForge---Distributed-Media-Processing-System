@@ -1,15 +1,24 @@
 import time
 
+from common import config 
+from worker.tasks import (
+    moderation,
+    subtitles,
+    thumbnail,
+    transcode
+)
+
+TASKS = {
+    "transcode": transcode.run,
+    "thumbnail": thumbnail.run,
+    "subtitles": subtitles.run,
+    "moderation": moderation.run, 
+}
+
 def process_job(job):
+    task_type = job.task_type or config.DEFAULT_TASK
 
-    print(f"[Worker] Processing job: {job.job_id}")
+    if task_type not in TASKS:
+        raise ValueError(f"Unknown task type: {task_type}")
 
-    time.sleep(2)
-
-    processed_data = job.data
-
-    detail = f"Successfully processed {job.filename}"
-
-    print(f"[Worker] Job {job.job_id} completed")
-
-    return processed_data, detail
+    return TASKS[task_type](job)
