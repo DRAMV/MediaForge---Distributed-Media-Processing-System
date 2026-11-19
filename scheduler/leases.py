@@ -22,7 +22,7 @@ class LeaseTable:
         self._attempts: dict[str, int] = {}   # survives after a lease ends
         self.lease_time = config.LEASE_SECONDS if lease_time is None else lease_time
         self._clock = time.monotonic if clock is None else clock
-        self._on_expire = on_expire           # called as on_expire(job_id, worker_id)
+        self._on_expire = on_expire     # called as on_expire(job_id, worker_id)
         self._check_interval = check_interval
         self._stop = threading.Event()
         self._thread = None
@@ -42,3 +42,20 @@ class LeaseTable:
 
             del self._leases[job_id]
             return True
+
+    def check(self): #Expire and return overdue leases.
+        expired = []
+        with self._lock:
+            now = self._clock
+            for job_id, lease in list(self._leases.items()):
+                if now > lease.expires:
+                    del self.leases[job_id]
+                    expired.append((job_id, lease.worker_id))
+
+        self._fire(expired)
+        return expired
+
+    def _fire(self, pairs):
+        if self._on_expire is not None:
+            for job_id, worker_id in pairs:
+                self._on_expire(job_id, worker_id)
