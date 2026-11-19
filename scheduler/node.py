@@ -44,37 +44,40 @@ class Manager(farm_pb2_grpc.ManagerServicer):
               f"file={request.filename} bytes={len(request.data)}")
         self.store.create(job_id, request.filename, task_type)
 
-        worker_address = self.scheduler.next_worker()
-        self.store.assign(job_id, worker_address)
-        print(f"[manager] H3 scheduling job={job_id} -> worker at {worker_address}")
+        ack = None
+        for worker_address in self.scheduler.order():
+            self.store.assign(job_id, worker_address)
+            print(f"[manager] H3 scheduling job={job_id} -> worker at {worker_address}")
+            try:
+                with grpc.insecure_channel(
+                    worker_address, options=config.CHANNEL_OPTIONS
+                ) as channel:
+                    worker = farm_pb2_grpc.WorkerStub(channel)
+                    ack = worker.SubmitJob(
+                        farm_pb2.Job(
+                            job_id=job_id,
+                            filename=request.filename,
+                            data=request.data,
+                            task_type=task_type,
+                        ),
+                        timeout=config.WORKER_ACK_TIMEOUT,
+                    )
+            except grpc.RpcError as error:
+                print(f"[manager] worker {worker_address} unavailable "
+                      f"({error.code().name}) - trying next")
+                ack = None
+                continue
+            if ack.accepted:
+                break
+            print(f"[manager] worker {worker_address} refused job={job_id} - trying next")
+            ack = None
 
-        try:
-            with grpc.insecure_channel(
-                worker_address, options=config.CHANNEL_OPTIONS
-            ) as channel:
-                worker = farm_pb2_grpc.WorkerStub(channel)
-                ack = worker.SubmitJob(
-                    farm_pb2.Job(
-                        job_id=job_id,
-                        filename=request.filename,
-                        data=request.data,
-                        task_type=task_type,
-                    ),
-                    timeout=config.WORKER_ACK_TIMEOUT,
-                )
-        except grpc.RpcError as error:
-            return self._fail_reply(
-                job_id, task_type,
-                f"worker {worker_address} unavailable ({error.code().name})",
-            )
-
-        if not ack.accepted:
-            return self._fail_reply(
-                job_id, task_type, f"worker {worker_address} refused the job"
-            )
+        if ack is None:
+            return self._fail_reply(job_id, task_type, "no worker available")
+        
         print(f"[manager] H5 worker={ack.worker_id} got job={job_id} "
               f"task={task_type} (accepted={ack.accepted})")
-
+                
         if not self.store.wait_done(job_id, config.JOB_RESULT_TIMEOUT):
             return self._fail_reply(
                 job_id, task_type, "timeout waiting for worker to finish job"
@@ -93,7 +96,7 @@ class Manager(farm_pb2_grpc.ManagerServicer):
             detail=result.detail,
             task_type=task_type,
         )
-
+    
     def ReportResult(self, request, context):
         print(f"[manager] H7 worker={request.worker_id} done job={request.job_id} "
               f"bytes={len(request.data)}")
