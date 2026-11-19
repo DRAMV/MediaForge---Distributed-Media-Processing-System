@@ -50,7 +50,10 @@ class Manager(farm_pb2_grpc.ManagerServicer):
             f"(accepted={ack.accepted})"
         )
 
-        finished = self.jobs[job_id]["done"].wait(timeout=30)
+        finished = self.jobs[job_id]["done"].wait(
+            timeout=config.JOB_RESULT_TIMEOUT
+        )
+        
         if not finished:
             self.jobs.pop(job_id, None)
             return farm_pb2.UploadReply(

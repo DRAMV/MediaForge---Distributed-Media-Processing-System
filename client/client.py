@@ -56,6 +56,12 @@ def main():
     
     elif reply.detail.startswith("transcode: converted"):
         out_path = out_path.with_suffix(".mp4")
+
+    elif reply.task_type == "subtitles":
+        out_path = out_path.with_suffix(".srt")
+        
+    elif reply.task_type == "moderation":
+        out_path = out_path.with_suffix(".json")
     
     out_path.write_bytes(reply.data)
 
