@@ -72,3 +72,77 @@ class ElectionNode:
             self.leader_id = leader_id
             self._reset_deadline()
             return self.term, True
+        
+    
+    # ---- asking other managers -----------------------------------------
+    def start_election(self):
+        with self._lock:
+            self.state = CANDIDATE
+            self.term += 1
+            self.voted_for = self.node_id
+            my_term = self.term
+            self._reset_deadline()
+        print(f"[{self.node_id}] term={my_term} became CANDIDATE")
+
+        votes = 1  # my own vote
+        for peer in self.peers:
+            reply = self.transport.request_vote(peer, my_term, self.node_id)
+            if reply is None:
+                continue
+            peer_term, granted = reply
+            with self._lock:
+                if peer_term > self.term:
+                    self._become_follower(peer_term)
+                    return
+            if granted:
+                votes += 1
+
+        with self._lock:
+            if self.state == CANDIDATE and self.term == my_term \
+                    and votes >= self._majority():
+                self.state = LEADER
+                self.leader_id = self.node_id
+                self._last_beat = 0.0
+                print(f"[{self.node_id}] term={my_term} became LEADER "
+                      f"({votes} votes)")
+
+    def _send_heartbeats(self):
+        with self._lock:
+            my_term = self.term
+        for peer in self.peers:
+            reply = self.transport.send_heartbeat(peer, my_term, self.node_id)
+            if reply is None:
+                continue
+            with self._lock:
+                if reply[0] > self.term:
+                    self._become_follower(reply[0])
+                    return
+
+    # ---- the clock -------------------------------------------------------
+    def tick(self):
+        now = time.monotonic()
+        with self._lock:
+            state = self.state
+            due_beat = (state == LEADER
+                        and now - self._last_beat >= self.heartbeat_every)
+            due_election = state != LEADER and now >= self._deadline
+            if due_beat:
+                self._last_beat = now
+        if due_beat:
+            self._send_heartbeats()
+        elif due_election:
+            self.start_election()
+
+    def start(self):
+        self._running = True
+        self._reset_deadline()
+        self._thread = threading.Thread(target=self._loop, daemon=True)
+        self._thread.start()
+
+    def stop(self):
+        self._running = False
+
+    def _loop(self):
+        while self._running:
+            self.tick()
+            time.sleep(0.05)
