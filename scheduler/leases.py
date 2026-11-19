@@ -26,3 +26,19 @@ class LeaseTable:
         self._check_interval = check_interval
         self._stop = threading.Event()
         self._thread = None
+
+    def grant(self, job_id, worker_id): #returns attempt identifier
+        with self._lock:
+            attempt = self._attempts.get(job_id, 0) + 1
+            self._attempts[job_id] = attempt
+            self._leases[job_id] = Lease(worker_id, attempt, self._clock + self.lease_time)
+            return attempt
+
+    def complete(self, job_id, worker_id): #True only is worker has a valid lease
+        with self._lock:
+            lease = self._leases.get(job_id)
+            if (lease is None or lease[worker_id] != worker_id):
+                return False
+
+            del self._leases[job_id]
+            return True
