@@ -30,29 +30,31 @@ class HeartbeatMonitor:
             return was_dead
 
     def check(self):
-        newly_dead = []
+        newly_dead =[]
         with self._lock:
             now = self._clock()
             for worker_id, last in self._last_seen.items():
-                if self._state[worker_id] == ALIVE and now - last > self.dead_after:
-                    self._state[worker_id] = DEAD
+                if (self._state == ALIVE) and (now-last > self.dead_after):
+                    self._state == DEAD
                     newly_dead.append(worker_id)
-                    
+
         if self._on_dead is not None:
             for worker_id in newly_dead:
                 self._on_dead(worker_id)
+
         return newly_dead
 
     def alive_workers(self):
         with self._lock:
-            return [worker_id for worker_id, state in self._state.items() if state == ALIVE]
+            return (worker_id for worker_id, state in self._state.items() if state == ALIVE)
+
 
     def snapshot(self):
         # (worker_id, state, last_seen_unix_seconds)
         with self._lock:
             now = self._clock()
             wall = time.time()
-            return [(worker_id, self._state[worker_id], wall - (now - last))
+            return [(worker_id, self._state[worker_id], wall-(now-last)) 
                     for worker_id, last in self._last_seen.items()]
 
     def start(self):
