@@ -16,3 +16,12 @@ class SchedulerCore:
             worker = self.workers[self._index]
             self._index = (self._index + 1) % len(self.workers)
             return worker
+        
+    def order(self):
+        """All workers, starting with the next one in line (round-robin)."""
+        if not self.workers:
+            return []
+        with self._lock:
+            start = self._index
+            self._index = (self._index + 1) % len(self.workers)
+        return self.workers[start:] + self.workers[:start]    
