@@ -1,5 +1,7 @@
 import argparse
 import logging
+import pathlib
+import sys
 
 import grpc
 from common import config
@@ -27,3 +29,20 @@ def parse_args():
         p.error(f"--count must be between 1 and {MAX_SAFE_UPLOADS} "
                 f"(the manager's thread pool would starve above that)")
     return args
+
+def main():
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [client] %(message)s",
+                        datefmt="%H:%M:%S")
+
+    args = parse_args()
+    path = pathlib.Path(args.file)
+    if not path.is_file():
+        sys.exit(f"[client] file not found: {path}")
+
+    data = path.read_bytes()
+    out_dir = pathlib.Path(args.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    
+
+if __name__ == "__main__":
+    main()
