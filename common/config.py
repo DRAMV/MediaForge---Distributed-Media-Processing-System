@@ -81,6 +81,32 @@ ENABLE_LEASES = _bool("FARM_ENABLE_LEASES", False)            # M4: jobs expire 
 LEASE_SECONDS = _float("FARM_LEASE_SECONDS", 15.0)            # M4: lease duration
 ENABLE_DEDUP = _bool("FARM_ENABLE_DEDUP", False)              # M4: same job_id processed once
 
+# ---- v3: Raft leader election + replicated log (M2 consumes these) -------------
+# NOTE: RAFT heartbeat (leader->followers, sub-second) is NOT the worker
+# heartbeat above (worker->manager, seconds). Two different things.
+NODE_ID = _str("FARM_NODE_ID", socket.gethostname())            # who am I as a manager peer
+PEER_ADDRESSES = _list("FARM_PEERS", "localhost:50051")         # ALL manager addresses, incl. self
+ENABLE_ELECTION = _bool("FARM_ENABLE_ELECTION", False)          # OFF = single manager, phase-1 behaviour
+ELECTION_TIMEOUT_MIN = _float("FARM_ELECTION_TIMEOUT_MIN", 1.5) # randomized per node between min..max
+ELECTION_TIMEOUT_MAX = _float("FARM_ELECTION_TIMEOUT_MAX", 3.0)
+RAFT_HEARTBEAT_INTERVAL = _float("FARM_RAFT_HEARTBEAT", 0.5)    # leader -> followers AppendEntries
+
+
+
+#-----------moderation and subs ------- (new additions start here)
+SUBTITLE_MODEL = _str("FARM_SUBTITLE_MODEL", "base")
+SUBTITLE_LANGUAGE = _str("FARM_SUBTITLE_LANGUAGE", "")
+
+MODERATION_MODEL = _str(
+    "FARM_MODERATION_MODEL",
+    "Falconsai/nsfw_image_detection",
+)
+
+MODERATION_THRESHOLD = _float("FARM_MODERATION_THRESHOLD", 0.80)
+MODERATION_INTERVAL = _float("FARM_MODERATION_INTERVAL", 2.0)
+MODERATION_MAX_SECONDS = _float("FARM_MODERATION_MAX_SECONDS", 120.0)
+
+#-----------moderation and subs ------- (new additions end here)
 
 def summary(component: str) -> str:
     """One dump for startup logs, e.g. print(config.summary('manager'))."""
@@ -91,6 +117,9 @@ def summary(component: str) -> str:
         f"  timeouts: client={CLIENT_RPC_TIMEOUT}s ack={WORKER_ACK_TIMEOUT}s "
         f"result={JOB_RESULT_TIMEOUT}s grace={GRACE_SECONDS}s\n"
         f"  tasks={list(TASK_TYPES)}  process={PROCESS_SECONDS}s  results_dir={RESULTS_DIR}\n"
+        f"  node_id={NODE_ID}  peers={PEER_ADDRESSES}  election={ENABLE_ELECTION} "
+        f"(timeout {ELECTION_TIMEOUT_MIN}-{ELECTION_TIMEOUT_MAX}s, "
+        f"raft_hb={RAFT_HEARTBEAT_INTERVAL}s)\n"
         f"  flags: clocks={ENABLE_CLOCKS} heartbeats={ENABLE_HEARTBEATS} "
         f"leases={ENABLE_LEASES} dedup={ENABLE_DEDUP}"
     )

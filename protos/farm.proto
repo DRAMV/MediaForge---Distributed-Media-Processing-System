@@ -86,3 +86,44 @@ message WorkerList {
     repeated WorkerInfo workers = 1;
 }
 
+service Raft{
+    rpc RequestVote(VoteRequest) returns (VoteReply);
+
+    // leader -> followers: replicate log entries AND serve as heartbeat.
+    // An empty `entries` list = pure heartbeat, no new data.
+    rpc AppendEntries(AppendEntriesRequest) returns (AppendEntriesReply);
+}
+
+message VoteRequest {
+    int32 term = 1;             // candidate's current term
+    string candidate_id = 2;    // e.g. "manager-2"
+    int32 last_log_index = 3;   // followers reject candidates with stale logs
+    int32 last_log_term = 4;    // term of that last entry
+}
+
+message VoteReply {
+    int32 term = 1;             // follower's term (candidate steps down if bigger)
+    bool vote_granted = 2;
+}
+
+message LogEntry {
+    int32 term = 1;     // term in which the leader created this entry
+    int32 index = 2;    // 1-based position in the replicated log
+    bytes command = 3;  // serialized state-machine op, e.g.
+                        // {"op":"ENQUEUE_JOB","job_id":"J-...","task_type":"transcode"}
+                        // {"op":"JOB_DONE","job_id":"J-..."}
+}
+
+message AppendEntriesRequest {
+    int32 term = 1;                 // leader's term
+    string leader_id = 2;
+    int32 prev_log_index = 3;       // entry immediately before the new ones
+    int32 prev_log_term = 4;        // its term — the consistency check
+    repeated LogEntry entries = 5;  // new entries ([] = heartbeat only)
+    int32 leader_commit = 6;        // leader's commitIndex
+}
+
+message AppendEntriesReply {
+    int32 term = 1;     // follower's current term
+    bool success = 2;   // true if log matched prev_log_index/prev_log_term
+}
