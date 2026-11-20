@@ -24,7 +24,7 @@ class Dedup:
         self.enabled = config.ENABLE_DEDUP if enabled is None else enabled
 
     def claim (self, key):
-        if self.enabled is None:
+        if not self.enabled:
             return (True, None)
         existing = self._entries.get(key)
 
@@ -35,7 +35,7 @@ class Dedup:
         return (True, None)
 
     def complete(self, key, worker_id, detail, size):
-        if self.enabled is None:
+        if not self.enabled:
             return False
 
         entry = self._entries.get(key)
@@ -52,4 +52,4 @@ class Dedup:
     def lookup(self, key):
         with self._lock:
             entry = self._entries.get(key)
-            return entry if entry is not None else None
+            return replace(entry) if entry is not None else None
