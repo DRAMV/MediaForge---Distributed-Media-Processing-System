@@ -1,0 +1,33 @@
+# keeps the docker build context small and the image clean
+# (also: compose-file edits won't trigger image rebuilds)
+
+# git
+.git
+.gitignore
+.github/
+
+# python junk
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# runtime output — never bake these into an image
+logs/
+results/
+*.log
+
+# local env / secrets
+.env
+
+# host-only files
+docker-compose.yml
+*.md
+
+# virtualenvs if anyone makes one in the repo
+.venv/
+venv/
+
+# editor noise
+.vscode/
+.idea/

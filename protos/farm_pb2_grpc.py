@@ -5,7 +5,7 @@ import warnings
 
 from protos import farm_pb2 as farm__pb2
 
-GRPC_GENERATED_VERSION = '1.68.1'
+GRPC_GENERATED_VERSION = '1.85.1'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -18,16 +18,15 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + f' but the generated code in farm_pb2_grpc.py depends on'
+        + ' but the generated code in farm_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
     )
 
 
-class ManagerStub(object):
-    """---------- Client -> Manager  (step 1 and steps 8-9) ----------
-    """
+class ManagerStub:
+    """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
         """Constructor.
@@ -45,11 +44,20 @@ class ManagerStub(object):
                 request_serializer=farm__pb2.ResultReport.SerializeToString,
                 response_deserializer=farm__pb2.ReportAck.FromString,
                 _registered_method=True)
+        self.Heartbeat = channel.unary_unary(
+                '/farm.Manager/Heartbeat',
+                request_serializer=farm__pb2.HeartbeatRequest.SerializeToString,
+                response_deserializer=farm__pb2.HeartbeatAck.FromString,
+                _registered_method=True)
+        self.ListWorkers = channel.unary_unary(
+                '/farm.Manager/ListWorkers',
+                request_serializer=farm__pb2.Empty.SerializeToString,
+                response_deserializer=farm__pb2.WorkerList.FromString,
+                _registered_method=True)
 
 
-class ManagerServicer(object):
-    """---------- Client -> Manager  (step 1 and steps 8-9) ----------
-    """
+class ManagerServicer:
+    """Missing associated documentation comment in .proto file."""
 
     def UploadVideo(self, request, context):
         """One call: upload in, finished result out (manager waits for the worker).
@@ -59,7 +67,21 @@ class ManagerServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def ReportResult(self, request, context):
-        """Worker -> Manager (steps 6-7): worker hands over the finished result.
+        """Worker hands over the finished result
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def Heartbeat(self, request, context):
+        """M3: workers ping the manager every few seconds so it can mark them ALIVE/DEAD.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListWorkers(self, request, context):
+        """M2/M4: dashboard + client can see the worker registry and its state.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -78,6 +100,16 @@ def add_ManagerServicer_to_server(servicer, server):
                     request_deserializer=farm__pb2.ResultReport.FromString,
                     response_serializer=farm__pb2.ReportAck.SerializeToString,
             ),
+            'Heartbeat': grpc.unary_unary_rpc_method_handler(
+                    servicer.Heartbeat,
+                    request_deserializer=farm__pb2.HeartbeatRequest.FromString,
+                    response_serializer=farm__pb2.HeartbeatAck.SerializeToString,
+            ),
+            'ListWorkers': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListWorkers,
+                    request_deserializer=farm__pb2.Empty.FromString,
+                    response_serializer=farm__pb2.WorkerList.SerializeToString,
+            ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
             'farm.Manager', rpc_method_handlers)
@@ -86,9 +118,8 @@ def add_ManagerServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class Manager(object):
-    """---------- Client -> Manager  (step 1 and steps 8-9) ----------
-    """
+class Manager:
+    """Missing associated documentation comment in .proto file."""
 
     @staticmethod
     def UploadVideo(request,
@@ -144,9 +175,63 @@ class Manager(object):
             metadata,
             _registered_method=True)
 
+    @staticmethod
+    def Heartbeat(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/farm.Manager/Heartbeat',
+            farm__pb2.HeartbeatRequest.SerializeToString,
+            farm__pb2.HeartbeatAck.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
 
-class WorkerStub(object):
-    """---------- Manager -> Worker  (steps 3-4) ----------
+    @staticmethod
+    def ListWorkers(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/farm.Manager/ListWorkers',
+            farm__pb2.Empty.SerializeToString,
+            farm__pb2.WorkerList.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+
+class WorkerStub:
+    """Manager sends the job and then worker ACKs. works in background
     """
 
     def __init__(self, channel):
@@ -162,13 +247,12 @@ class WorkerStub(object):
                 _registered_method=True)
 
 
-class WorkerServicer(object):
-    """---------- Manager -> Worker  (steps 3-4) ----------
+class WorkerServicer:
+    """Manager sends the job and then worker ACKs. works in background
     """
 
     def SubmitJob(self, request, context):
-        """Manager sends the job; worker ACKs immediately, works in background.
-        """
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -189,8 +273,8 @@ def add_WorkerServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class Worker(object):
-    """---------- Manager -> Worker  (steps 3-4) ----------
+class Worker:
+    """Manager sends the job and then worker ACKs. works in background
     """
 
     @staticmethod
