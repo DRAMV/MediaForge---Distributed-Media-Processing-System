@@ -37,6 +37,8 @@ class Manager(farm_pb2_grpc.ManagerServicer):
                     self.store.create(
                         command["job_id"], command["filename"], command["task_type"]
                     )
+                elif command.get("op") == "JOB_DONE":
+                    self.store.remove(command["job_id"])
 
     def _replicate(self, job_id, filename, task_type):
         """Write the job to the log and wait until a majority has a copy."""
@@ -63,10 +65,16 @@ class Manager(farm_pb2_grpc.ManagerServicer):
             if task in name:
                 return task
         return config.DEFAULT_TASK
+    
+    def _log_done(self, job_id):
+        """Tell every manager this job is finished so they can forget it."""
+        if self.log is not None:
+            self.log.append(self.election.term, {"op": "JOB_DONE", "job_id": job_id})
 
     def _fail_reply(self, job_id, task_type, detail):
         self.store.fail(job_id)
         self.store.remove(job_id)
+        self._log_done(job_id)
         print(f"[manager] job={job_id} FAILED: {detail}")
         return farm_pb2.UploadReply(
             job_id=job_id, data=b"", detail=detail, task_type=task_type
@@ -139,6 +147,7 @@ class Manager(farm_pb2_grpc.ManagerServicer):
 
         result = self.store.result(job_id)
         self.store.remove(job_id)
+        self._log_done(job_id)
         print(f"[manager] H8 sending result to client job={job_id} "
               f"bytes={len(result.data)}")
         context.add_callback(
