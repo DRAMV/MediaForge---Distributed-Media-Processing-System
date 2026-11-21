@@ -6,13 +6,14 @@ import grpc
 
 from common import config
 from protos import farm_pb2, farm_pb2_grpc
-from scheduler.election import ElectionNode
+from scheduler.election import ElectionNode, LEADER
 from scheduler.scheduler_core import SchedulerCore
 from scheduler.state_store import JobStore
 
 
 class Manager(farm_pb2_grpc.ManagerServicer):
-    def __init__(self):
+    def __init__(self, election=None):
+        self.election = election
         self.store = JobStore()
         self.scheduler = SchedulerCore(config.WORKER_ADDRESSES)
 
@@ -34,6 +35,13 @@ class Manager(farm_pb2_grpc.ManagerServicer):
         )
 
     def UploadVideo(self, request, context):
+        if self.election is not None and self.election.state != LEADER:
+            leader = self.election.leader_id or "unknown"
+            print(f"[manager] rejected upload: not the leader (leader={leader})")
+            context.abort(
+                grpc.StatusCode.FAILED_PRECONDITION,
+                f"NOT_LEADER leader={leader}",
+            )
         task_type = self._pick_task(request)
         if task_type not in config.TASK_TYPES:
             context.abort(
@@ -180,11 +188,11 @@ def serve():
         futures.ThreadPoolExecutor(max_workers=10),
         options=config.CHANNEL_OPTIONS,
     )
-    farm_pb2_grpc.add_ManagerServicer_to_server(Manager(), server)
     election = None
     if config.ENABLE_ELECTION:
         election = build_election_node()
         farm_pb2_grpc.add_RaftServicer_to_server(RaftService(election), server)
+    farm_pb2_grpc.add_ManagerServicer_to_server(Manager(election), server)
     server.add_insecure_port(f"[::]:{config.MANAGER_PORT}")
     server.start()
     print(f"[manager] listening on port {config.MANAGER_PORT}")
