@@ -15,7 +15,8 @@ def start_manager(address, log=None):
     log = log or ReplicatedLog(address, len(ADDRESSES))
     peers = [a for a in ADDRESSES if a != address]
     node = ElectionNode(address, peers, GrpcTransport(log=log),
-                        timeout_range=(0.3, 0.6), heartbeat_every=0.1)
+                        timeout_range=(0.3, 0.6), heartbeat_every=0.1,
+                        log_info=lambda: (log.last_index(), log.term_at(log.last_index())))
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=4))
     farm_pb2_grpc.add_RaftServicer_to_server(RaftService(node, log), server)
     server.add_insecure_port(address)
@@ -77,7 +78,28 @@ def test_commit_with_one_manager_down_and_catch_up():
     for m in managers.values():
         stop(m)
 
+def test_manager_with_an_old_log_cannot_win():
+    managers = {a: start_manager(a) for a in ADDRESSES}
+    leader_addr = find_leader(managers)
+    leader = managers[leader_addr]
+    others = [a for a in ADDRESSES if a != leader_addr]
+    stale_addr, good_addr = others
+    stale_log = managers[stale_addr]["log"]
+    stop(managers[stale_addr])                         # this one misses the job
+
+    index = leader["log"].append(leader["node"].term, {"op": "ENQUEUE_JOB", "job_id": "J-9"})
+    assert wait_until(lambda: leader["log"].commit_index >= index)   # leader + good one
+
+    stop(leader)                                       # leader dies
+    managers[stale_addr] = start_manager(stale_addr, log=stale_log)  # stale one is back
+    assert wait_until(lambda: managers[good_addr]["node"].state == LEADER, seconds=8)
+    assert managers[stale_addr]["node"].state != LEADER
+    assert managers[good_addr]["log"].last_index() == 1             # job is still there
+    print("PASS manager with an old log cannot win; the committed job survives")
+    for a in (stale_addr, good_addr):
+        stop(managers[a])
 
 if __name__ == "__main__":
     test_job_reaches_all_managers_and_commits()
     test_commit_with_one_manager_down_and_catch_up()
+    test_manager_with_an_old_log_cannot_win()

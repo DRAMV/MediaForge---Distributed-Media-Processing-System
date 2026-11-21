@@ -14,10 +14,11 @@ class FakeNetwork:
         net = self
 
         class T:
-            def request_vote(self, peer, term, cand):
+            def request_vote(self, peer, term, cand, last_index=0, last_term=0):
                 if me in net.down or peer in net.down:
                     return None
-                return net.nodes[peer].handle_vote_request(term, cand)
+                return net.nodes[peer].handle_vote_request(
+                    term, cand, last_index, last_term)
 
             def send_heartbeat(self, peer, term, leader):
                 if me in net.down or peer in net.down:
@@ -85,8 +86,18 @@ def test_no_leader_without_majority():
         n.stop()
     print("PASS no leader without majority")
 
+def test_vote_refused_to_a_candidate_with_an_older_log():
+    voter = ElectionNode("m1", [], None, log_info=lambda: (3, 2))
+    # candidate's log ends at term 1 (older than my term 2) -> refuse
+    assert voter.handle_vote_request(5, "m2", 4, 1) == (5, False)
+    # same last term but shorter log -> refuse
+    assert voter.handle_vote_request(6, "m2", 2, 2) == (6, False)
+    # log at least as up to date -> grant
+    assert voter.handle_vote_request(7, "m3", 3, 2) == (7, True)
+    print("PASS vote refused for an older log")
 
 if __name__ == "__main__":
     test_one_leader_elected()
     test_new_leader_after_crash()
     test_no_leader_without_majority()
+    test_vote_refused_to_a_candidate_with_an_older_log()

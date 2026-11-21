@@ -167,7 +167,8 @@ class RaftService(farm_pb2_grpc.RaftServicer):
 
     def RequestVote(self, request, context):
         term, granted = self.election.handle_vote_request(
-            request.term, request.candidate_id
+            request.term, request.candidate_id,
+            request.last_log_index, request.last_log_term,
         )
         return farm_pb2.VoteReply(term=term, vote_granted=granted)
 
@@ -207,10 +208,14 @@ class GrpcTransport:
                 self._stubs[address] = farm_pb2_grpc.RaftStub(channel)
             return self._stubs[address]
 
-    def request_vote(self, peer, term, candidate_id):
+    def request_vote(self, peer, term, candidate_id,
+                     last_log_index=0, last_log_term=0):
         try:
             reply = self._stub(peer).RequestVote(
-                farm_pb2.VoteRequest(term=term, candidate_id=candidate_id),
+                farm_pb2.VoteRequest(
+                    term=term, candidate_id=candidate_id,
+                    last_log_index=last_log_index, last_log_term=last_log_term,
+                ),
                 timeout=self.rpc_timeout,
             )
             return reply.term, reply.vote_granted
@@ -261,13 +266,17 @@ def other_managers():
             if a != me and a.split(":")[0] != me]
 
 
-def build_election_node(transport=None):
+def build_election_node(transport=None, log=None):
+    log_info = None
+    if log is not None:
+        log_info = lambda: (log.last_index(), log.term_at(log.last_index()))
     return ElectionNode(
         config.NODE_ID,
         other_managers(),
         transport or GrpcTransport(),
         timeout_range=(config.ELECTION_TIMEOUT_MIN, config.ELECTION_TIMEOUT_MAX),
         heartbeat_every=config.RAFT_HEARTBEAT_INTERVAL,
+        log_info=log_info,
     )
     
 def serve():
@@ -279,7 +288,7 @@ def serve():
     log = None
     if config.ENABLE_ELECTION:
         log = ReplicatedLog(config.NODE_ID, len(other_managers()) + 1)
-        election = build_election_node(GrpcTransport(log=log))
+        election = build_election_node(GrpcTransport(log=log), log)
     manager = Manager(election, log)
     if election:
         farm_pb2_grpc.add_RaftServicer_to_server(
