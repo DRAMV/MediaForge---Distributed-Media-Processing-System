@@ -31,8 +31,24 @@ def test_conflicting_entries_are_replaced():
     assert follower.entries == new
     print("PASS conflicts replaced")
 
+def test_heartbeat_does_not_cut_the_log():
+    follower = ReplicatedLog("m2", 3)
+    follower.accept(0, 0, [{"term": 1, "command": "a"}, {"term": 1, "command": "b"}])
+    assert follower.accept(1, 1, []) is True      # empty heartbeat
+    assert follower.last_index() == 2
+    print("PASS heartbeat keeps entries")
+
+
+def test_follower_commit_is_capped():
+    follower = ReplicatedLog("m2", 3)
+    follower.accept(0, 0, [{"term": 1, "command": "a"}])
+    follower.commit_to(5)
+    assert follower.commit_index == 1
+    print("PASS commit capped at last entry")
 
 if __name__ == "__main__":
     test_commit_needs_majority()
     test_follower_copies_and_catches_up()
     test_conflicting_entries_are_replaced()
+    test_heartbeat_does_not_cut_the_log()
+    test_follower_commit_is_capped()
