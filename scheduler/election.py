@@ -17,12 +17,15 @@ class ElectionNode:
     """
 
     def __init__(self, node_id, peers, transport,
-                 timeout_range=(1.5, 3.0), heartbeat_every=0.5):
+                timeout_range=(1.5, 3.0), heartbeat_every=0.5,
+                log_info=None):
         self.node_id = node_id
         self.peers = list(peers)
         self.transport = transport
         self.timeout_range = timeout_range
         self.heartbeat_every = heartbeat_every
+        # log_info() -> (last_log_index, last_log_term) of my own log
+        self.log_info = log_info or (lambda: (0, 0))
 
         self.state = FOLLOWER
         self.term = 0
@@ -53,12 +56,17 @@ class ElectionNode:
         self.state = FOLLOWER
 
     # ---- answering other managers (called by the network layer) ---------
-    def handle_vote_request(self, term, candidate_id):
+    def handle_vote_request(self, term, candidate_id,
+                            last_log_index=0, last_log_term=0):
         with self._lock:
             if term > self.term:
                 self._become_follower(term)
+            my_index, my_term = self.log_info()
+            # only vote for a candidate whose log is at least as up to date as mine
+            log_ok = (last_log_term, last_log_index) >= (my_term, my_index)
             granted = (term == self.term
-                       and self.voted_for in (None, candidate_id))
+                       and self.voted_for in (None, candidate_id)
+                       and log_ok)
             if granted:
                 self.voted_for = candidate_id
                 self._reset_deadline()
@@ -84,9 +92,12 @@ class ElectionNode:
             self._reset_deadline()
         print(f"[{self.node_id}] term={my_term} became CANDIDATE")
 
+        last_index, last_term = self.log_info()
         votes = 1  # my own vote
         for peer in self.peers:
-            reply = self.transport.request_vote(peer, my_term, self.node_id)
+            reply = self.transport.request_vote(
+                peer, my_term, self.node_id, last_index, last_term
+            )
             if reply is None:
                 continue
             peer_term, granted = reply
