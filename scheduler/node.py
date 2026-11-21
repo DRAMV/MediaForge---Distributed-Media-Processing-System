@@ -261,7 +261,7 @@ def other_managers():
             if a != me and a.split(":")[0] != me]
 
 
-def build_election_node():
+def build_election_node(transport=None):
     return ElectionNode(
         config.NODE_ID,
         other_managers(),
