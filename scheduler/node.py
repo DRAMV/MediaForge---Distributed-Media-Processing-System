@@ -159,8 +159,26 @@ class Manager(farm_pb2_grpc.ManagerServicer):
             detail=result.detail,
             task_type=task_type,
         )
-    
+    def _forward_result(self, request):
+        """A worker reported to a follower: pass the result on to the leader."""
+        leader = self.election.leader_id
+        if not leader:
+            return farm_pb2.ReportAck(ok=False)
+        address = leader if ":" in leader else f"{leader}:{config.MANAGER_PORT}"
+        print(f"[manager] forwarding result job={request.job_id} to leader {address}")
+        try:
+            with grpc.insecure_channel(
+                address, options=config.CHANNEL_OPTIONS
+            ) as channel:
+                return farm_pb2_grpc.ManagerStub(channel).ReportResult(
+                    request, timeout=config.WORKER_ACK_TIMEOUT
+                )
+        except grpc.RpcError:
+            return farm_pb2.ReportAck(ok=False)
+
     def ReportResult(self, request, context):
+        if self.election is not None and self.election.state != LEADER:
+            return self._forward_result(request)
         print(f"[manager] H7 worker={request.worker_id} done job={request.job_id} "
               f"bytes={len(request.data)}")
         accepted = self.store.complete(request.job_id, request)
