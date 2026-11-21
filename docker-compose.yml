@@ -4,10 +4,22 @@
 #   Start the farm:   docker compose up --build
 #   Upload a video:   docker compose run --rm client python -m client.client samples/video.mp4 --manager manager:50051
 #   Stop everything:  docker compose down
+#
+# High availability (3 managers with leader election, 2 workers):
+#   Start:  docker compose up --build manager-1 manager-2 manager-3 ha-worker-1 ha-worker-2
+#   Upload: python3 -m client.client samples/video.mp4 --manager localhost:50061
+#           (ports 50061/50062/50063 are manager-1/2/3; only the leader accepts)
+#   Kill the leader:  ./faults/kill_leader.sh
+#   Bring it back:    ./faults/restart_node.sh manager-1
 
 x-farm: &farm
   build: .
   image: mediaforge
+
+x-ha-env: &ha-env
+  FARM_ENABLE_ELECTION: "1"
+  FARM_PEERS: manager-1:50051,manager-2:50051,manager-3:50051
+  FARM_WORKERS: ha-worker-1:50052,ha-worker-2:50052
 
 services:
   manager:
@@ -41,3 +53,51 @@ services:
     volumes:
       - ./samples:/app/samples:ro
       - ./results:/app/results
+
+
+  # ---- high-availability set: start these by name (see top of file) ----
+  manager-1:
+    <<: *farm
+    profiles: ["ha"]
+    command: python -m scheduler.node
+    environment:
+      <<: *ha-env
+      FARM_NODE_ID: manager-1
+    ports:
+      - "50061:50051"
+
+  manager-2:
+    <<: *farm
+    profiles: ["ha"]
+    command: python -m scheduler.node
+    environment:
+      <<: *ha-env
+      FARM_NODE_ID: manager-2
+    ports:
+      - "50062:50051"
+
+  manager-3:
+    <<: *farm
+    profiles: ["ha"]
+    command: python -m scheduler.node
+    environment:
+      <<: *ha-env
+      FARM_NODE_ID: manager-3
+    ports:
+      - "50063:50051"
+
+  ha-worker-1:
+    <<: *farm
+    profiles: ["ha"]
+    command: python -m worker.worker
+    environment:
+      FARM_WORKER_ID: ha-worker-1
+      FARM_MANAGER_ADDRESS: manager-1:50051
+
+  ha-worker-2:
+    <<: *farm
+    profiles: ["ha"]
+    command: python -m worker.worker
+    environment:
+      FARM_WORKER_ID: ha-worker-2
+      FARM_MANAGER_ADDRESS: manager-1:50051
