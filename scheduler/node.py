@@ -7,8 +7,10 @@ from concurrent import futures
 import grpc
 
 from common import config
+from common.clock import LamportClock
 from protos import farm_pb2, farm_pb2_grpc
 from scheduler.election import ElectionNode, LEADER
+from scheduler.heartbeats import HeartbeatMonitor
 from scheduler.replicated_log import ReplicatedLog
 from scheduler.scheduler_core import SchedulerCore
 from scheduler.state_store import JobStore
@@ -23,6 +25,8 @@ class Manager(farm_pb2_grpc.ManagerServicer):
         self._apply_lock = threading.Lock()
         self.store = JobStore()
         self.scheduler = SchedulerCore(config.WORKER_ADDRESSES)
+        self.clock = LamportClock(owner="manager")
+        self.monitor = HeartbeatMonitor()
 
     def apply_committed(self):
         """Copy newly committed log entries into this manager's own JobStore."""
@@ -175,6 +179,27 @@ class Manager(farm_pb2_grpc.ManagerServicer):
                 )
         except grpc.RpcError:
             return farm_pb2.ReportAck(ok=False)
+    def Heartbeat(self, request, context):
+        self.clock.recv(request.lamport)
+        self.monitor.record_heartbeat(request.worker_id)
+        return farm_pb2.HeartbeatAck(ok=True, lamport=self.clock.send())
+
+    def _address_of(self, worker_id):
+        """The configured address whose host name is this worker's id (or "")."""
+        for address in config.WORKER_ADDRESSES:
+            if address.split(":")[0] == worker_id:
+                return address
+        return ""
+
+    def ListWorkers(self, request, context):
+        workers = [
+            farm_pb2.WorkerInfo(
+                worker_id=worker_id, address=self._address_of(worker_id),
+                state=state, last_seen_epoch=int(last_seen),
+            )
+            for worker_id, state, last_seen in self.monitor.snapshot()
+        ]
+        return farm_pb2.WorkerList(workers=workers)
 
     def ReportResult(self, request, context):
         if self.election is not None and self.election.state != LEADER:
@@ -327,10 +352,13 @@ def serve():
     print(f"[manager] listening on port {config.MANAGER_PORT}")
     if election:
         election.start()
+    if config.ENABLE_HEARTBEATS:
+        manager.monitor.start()
     try:
         server.wait_for_termination()
     except KeyboardInterrupt:
         print("[manager] received interrupt signal")
+        manager.monitor.stop()
         if election:
             election.stop()
         server.stop(grace=config.GRACE_SECONDS)
