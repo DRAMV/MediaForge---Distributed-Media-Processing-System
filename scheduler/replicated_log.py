@@ -1,3 +1,6 @@
+import threading
+
+
 class ReplicatedLog:
     """The list of accepted jobs that every manager keeps a copy of.
 
@@ -11,6 +14,7 @@ class ReplicatedLog:
         self.entries = []          # [{"term": 1, "command": {...}}, ...]
         self.commit_index = 0      # entries 1..commit_index are safe
         self._acks = {}            # entry number -> set of node ids that have it
+        self._lock = threading.RLock()
 
     def _majority(self):
         return self.total_nodes // 2 + 1
@@ -24,22 +28,25 @@ class ReplicatedLog:
     # ---- leader side -----------------------------------------------------
     def append(self, term, command):
         """Leader writes a new entry. Returns its number."""
-        self.entries.append({"term": term, "command": command})
-        index = len(self.entries)
-        self._acks[index] = {self.node_id}      # the leader has it
-        self._advance_commit()
-        return index
+        with self._lock:
+            self.entries.append({"term": term, "command": command})
+            index = len(self.entries)
+            self._acks[index] = {self.node_id}      # the leader has it
+            self._advance_commit()
+            return index
 
     def record_ack(self, index, node_id):
         """A follower says it has entries up to `index`."""
-        for i in range(self.commit_index + 1, index + 1):
-            self._acks.setdefault(i, set()).add(node_id)
-        self._advance_commit()
-        return self.commit_index >= index
+        with self._lock:
+            for i in range(self.commit_index + 1, min(index, len(self.entries)) + 1):
+                self._acks.setdefault(i, set()).update((self.node_id, node_id))
+            self._advance_commit()
+            return self.commit_index >= index
 
     def entries_from(self, index):
         """What to send a follower that already has entries 1..index-1."""
-        return self.entries[index - 1:]
+        with self._lock:
+            return list(self.entries[index - 1:])
 
     def _advance_commit(self):
         while self.commit_index < len(self.entries):
@@ -52,12 +59,25 @@ class ReplicatedLog:
     # ---- follower side ---------------------------------------------------
     def accept(self, prev_index, prev_term, entries):
         """Follower: add entries after prev_index. False = I'm missing some."""
-        if prev_index > len(self.entries):
-            return False
-        if prev_index >= 1 and self.term_at(prev_index) != prev_term:
-            return False
-        self.entries = self.entries[:prev_index] + list(entries)
-        return True
+        with self._lock:
+            if prev_index > len(self.entries):
+                return False
+            if prev_index >= 1 and self.term_at(prev_index) != prev_term:
+                return False
+            for offset, entry in enumerate(entries):
+                position = prev_index + offset          # 0-based slot
+                if position < len(self.entries):
+                    if self.entries[position]["term"] == entry["term"]:
+                        continue                         # already have it
+                    self.entries = self.entries[:position]   # conflict: cut here
+                self.entries.append(entry)
+            return True
+
+    def commit_to(self, index):
+        """Follower: the leader says entries up to `index` are safe."""
+        with self._lock:
+            self.commit_index = max(self.commit_index, min(index, len(self.entries)))
 
     def committed(self):
-        return self.entries[:self.commit_index]
+        with self._lock:
+            return self.entries[:self.commit_index]
