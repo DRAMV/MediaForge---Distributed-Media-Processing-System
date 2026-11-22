@@ -1,5 +1,6 @@
 import argparse, pathlib, sys, time
 import grpc
+from common import config
 from protos import farm_pb2, farm_pb2_grpc
 
 MAX_MSG = 64 * 1024 * 1024
@@ -68,7 +69,8 @@ def main():
     
     out_path.write_bytes(reply.data)
 
-    event(log, "H9", f"job={reply.job_id} done in {time.time()-start:.1f}s: {reply.detail}")
+    stamp = f" lamport={reply.lamport}" if config.ENABLE_CLOCKS else ""
+    event(log, "H9", f"job={reply.job_id} done in {time.time()-start:.1f}s: {reply.detail}{stamp}")
     print(f"[client] saved {len(reply.data)} bytes -> {out_path}")
 
 if __name__ == "__main__":
