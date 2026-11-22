@@ -114,26 +114,28 @@ class Manager(farm_pb2_grpc.ManagerServicer):
         for worker_address in self.scheduler.order():
             self.store.assign(job_id, worker_address)
             print(f"[manager] H3 scheduling job={job_id} -> worker at {worker_address}")
+            job = farm_pb2.Job(
+                job_id=job_id,
+                filename=request.filename,
+                data=request.data,
+                task_type=task_type,
+                lamport=self.clock.send() if config.ENABLE_CLOCKS else 0,
+            )
             try:
                 with grpc.insecure_channel(
                     worker_address, options=config.CHANNEL_OPTIONS
                 ) as channel:
                     worker = farm_pb2_grpc.WorkerStub(channel)
-                    ack = worker.SubmitJob(
-                        farm_pb2.Job(
-                            job_id=job_id,
-                            filename=request.filename,
-                            data=request.data,
-                            task_type=task_type,
-                        ),
-                        timeout=config.WORKER_ACK_TIMEOUT,
-                    )
+                    ack = worker.SubmitJob(job, timeout=config.WORKER_ACK_TIMEOUT)
             except grpc.RpcError as error:
                 print(f"[manager] worker {worker_address} unavailable "
                       f"({error.code().name}) - trying next")
                 ack = None
                 continue
             if ack.accepted:
+                if config.ENABLE_CLOCKS:
+                    print(f"[manager] clock job={job_id} sent lamport={job.lamport} "
+                          f"ack lamport={ack.lamport}")
                 break
             print(f"[manager] worker {worker_address} refused job={job_id} - trying next")
             ack = None
@@ -162,6 +164,7 @@ class Manager(farm_pb2_grpc.ManagerServicer):
             data=result.data,
             detail=result.detail,
             task_type=task_type,
+            lamport=self.clock.value if config.ENABLE_CLOCKS else 0,
         )
     def _forward_result(self, request):
         """A worker reported to a follower: pass the result on to the leader."""
@@ -204,6 +207,10 @@ class Manager(farm_pb2_grpc.ManagerServicer):
     def ReportResult(self, request, context):
         if self.election is not None and self.election.state != LEADER:
             return self._forward_result(request)
+        if config.ENABLE_CLOCKS:
+            self.clock.recv(request.lamport)
+            print(f"[manager] clock result job={request.job_id} "
+                  f"lamport={request.lamport} -> {self.clock.value}")
         print(f"[manager] H7 worker={request.worker_id} done job={request.job_id} "
               f"bytes={len(request.data)}")
         accepted = self.store.complete(request.job_id, request)
