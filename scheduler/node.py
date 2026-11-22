@@ -138,8 +138,10 @@ class Manager(farm_pb2_grpc.ManagerServicer):
                 continue
             if ack.accepted:
                 if config.ENABLE_CLOCKS:
-                    print(f"[manager] clock job={job_id} sent lamport={job.lamport} "
-                          f"ack lamport={ack.lamport}")
+                    self.event_log.info(
+                        f"clock job={job_id} sent lamport={job.lamport} "
+                        f"ack lamport={ack.lamport}"
+                    )
                 break
             self.event_log.info(
                 f"worker {worker_address} refused job={job_id} - trying next"
@@ -216,8 +218,8 @@ class Manager(farm_pb2_grpc.ManagerServicer):
             return self._forward_result(request)
         if config.ENABLE_CLOCKS:
             self.clock.recv(request.lamport)
-            print(f"[manager] clock result job={request.job_id} "
-                  f"lamport={request.lamport} -> {self.clock.value}")
+            self.event_log.info(f"clock result job={request.job_id} "
+                                f"lamport={request.lamport} -> {self.clock.value}")
         event(self.event_log, "H7", f"worker={request.worker_id} done job={request.job_id} "
               f"bytes={len(request.data)}")
         accepted = self.store.complete(request.job_id, request)
