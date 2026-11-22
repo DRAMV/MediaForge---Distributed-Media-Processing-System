@@ -21,8 +21,12 @@ class JobStore:
 
     def assign(self, job_id, worker_id):
         with self._lock:
-            self._jobs[job_id]["state"] = "ASSIGNED"
-            self._jobs[job_id]["worker_id"] = worker_id
+            job = self._jobs.get(job_id)
+            if job is None:
+                return False
+            job["state"] = "ASSIGNED"
+            job["worker_id"] = worker_id
+            return True
 
     def complete(self, job_id, result):
         with self._lock:
