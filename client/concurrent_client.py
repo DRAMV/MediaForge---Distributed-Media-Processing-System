@@ -1,19 +1,19 @@
 import argparse
 import concurrent.futures
-import logging
 import pathlib
 import sys
 import time
 
 import grpc
 from common import config
+from common.logging_setup import setup_logging, event
 from protos import farm_pb2, farm_pb2_grpc
 
 # The manager's gRPC pool has 10 threads and each UploadVideo holds one while it
 # waits for a worker. ReportResult needs a free thread too, so stay below 10.
 MAX_SAFE_UPLOADS = 8
 
-log = logging.getLogger("client")
+log = None   # configured once in main(); shared by the upload threads
 
 
 def parse_args():
@@ -82,8 +82,8 @@ def print_table(results, wall):
     print(f"{ok}/{len(results)} succeeded, total wall time {wall:.1f}s")
 
 def main():
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [client] %(message)s",
-                        datefmt="%H:%M:%S")
+    global log
+    log = setup_logging("client")
 
     args = parse_args()
     path = pathlib.Path(args.file)

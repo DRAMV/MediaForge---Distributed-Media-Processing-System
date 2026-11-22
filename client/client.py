@@ -18,6 +18,9 @@ def parse_args():
     return p.parse_args()
 
 def main():
+    from common.logging_setup import setup_logging, event
+    log = setup_logging("client")
+
     args = parse_args()
     path = pathlib.Path(args.file)
 
@@ -31,7 +34,7 @@ def main():
     ])
     stub = farm_pb2_grpc.ManagerStub(channel)
     
-    print(f"[client] H1 uploading {path.name} ({len(data)} bytes) to {args.manager}")
+    event(log, "H1", f"uploading {path.name} ({len(data)} bytes) to {args.manager}")
     start = time.time()
 
     try:
@@ -65,7 +68,7 @@ def main():
     
     out_path.write_bytes(reply.data)
 
-    print(f"[client] H9 job={reply.job_id} done in {time.time()-start:.1f}s: {reply.detail}")
+    event(log, "H9", f"job={reply.job_id} done in {time.time()-start:.1f}s: {reply.detail}")
     print(f"[client] saved {len(reply.data)} bytes -> {out_path}")
 
 if __name__ == "__main__":
