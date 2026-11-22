@@ -8,6 +8,7 @@ from worker.processor import process_job, TASKS
 from worker.manager_client import report_result
 
 from common import config
+from common.clock import LamportClock
 from common.logging_setup import setup_logging, event
 from dashboard.status_page import WorkerStatus, start_status_server
 
@@ -20,6 +21,7 @@ class WorkerService(farm_pb2_grpc.WorkerServicer):
     def __init__(self, pool, status):
         self.pool = pool
         self.status = status
+        self.clock = LamportClock(owner=config.WORKER_ID)
     
     def SubmitJob(self, request, context):
         task_type = request.task_type or config.DEFAULT_TASK
@@ -28,6 +30,9 @@ class WorkerService(farm_pb2_grpc.WorkerServicer):
                 grpc.StatusCode.INVALID_ARGUMENT,
                 f"Unknown task type: {task_type}",
             )
+
+        if config.ENABLE_CLOCKS:
+            self.clock.recv(request.lamport)
 
         self.status.update(request, "QUEUED")
 
@@ -41,6 +46,7 @@ class WorkerService(farm_pb2_grpc.WorkerServicer):
             job_id=request.job_id,
             accepted=True,
             worker_id=config.WORKER_ID,
+            lamport=self.clock.send() if config.ENABLE_CLOCKS else 0,
         )
 
 
@@ -63,11 +69,17 @@ class WorkerService(farm_pb2_grpc.WorkerServicer):
             data = b""
             detail = f"FAILED: {type(error).__name__}: {error}"
 
+        report_lamport = self.clock.send() if config.ENABLE_CLOCKS else 0
+        if config.ENABLE_CLOCKS:
+            print(f"[worker:{config.WORKER_ID}] clock job={job.job_id} "
+                  f"report lamport={report_lamport}")
+
         try:
             accepted = report_result(
                 config.MANAGER_ADDRESS,
                 job.job_id,
-                data,detail,
+                data, detail,
+                report_lamport,
             )
 
             if not accepted:
