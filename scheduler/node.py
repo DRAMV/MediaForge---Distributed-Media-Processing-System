@@ -1,6 +1,7 @@
 import threading
 import uuid
 import json
+import logging
 import time
 from concurrent import futures
 
@@ -8,6 +9,7 @@ import grpc
 
 from common import config
 from common.clock import LamportClock
+from common.logging_setup import setup_logging, event
 from protos import farm_pb2, farm_pb2_grpc
 from scheduler.election import ElectionNode, LEADER
 from scheduler.heartbeats import HeartbeatMonitor
@@ -18,9 +20,10 @@ from scheduler.state_store import JobStore
 REPLICATION_TIMEOUT = 5.0   # seconds to wait for a majority to copy a job
 
 class Manager(farm_pb2_grpc.ManagerServicer):
-    def __init__(self, election=None, log=None):
+    def __init__(self, election=None, log=None, event_log=None):
         self.election = election
         self.log = log
+        self.event_log = event_log or logging.getLogger("manager")
         self.applied = 0                      # log entries already applied
         self._apply_lock = threading.Lock()
         self.store = JobStore()
@@ -56,7 +59,7 @@ class Manager(farm_pb2_grpc.ManagerServicer):
         while time.time() < end:
             if self.log.commit_index >= index:
                 self.apply_committed()
-                print(f"[manager] job={job_id} committed in log (index {index})")
+                self.event_log.info(f"job={job_id} committed in log (index {index})")
                 return True
             time.sleep(0.05)
         return False
@@ -79,7 +82,7 @@ class Manager(farm_pb2_grpc.ManagerServicer):
         self.store.fail(job_id)
         self.store.remove(job_id)
         self._log_done(job_id)
-        print(f"[manager] job={job_id} FAILED: {detail}")
+        self.event_log.info(f"job={job_id} FAILED: {detail}")
         return farm_pb2.UploadReply(
             job_id=job_id, data=b"", detail=detail, task_type=task_type
         )
@@ -87,7 +90,7 @@ class Manager(farm_pb2_grpc.ManagerServicer):
     def UploadVideo(self, request, context):
         if self.election is not None and self.election.state != LEADER:
             leader = self.election.leader_id or "unknown"
-            print(f"[manager] rejected upload: not the leader (leader={leader})")
+            self.event_log.info(f"rejected upload: not the leader (leader={leader})")
             context.abort(
                 grpc.StatusCode.FAILED_PRECONDITION,
                 f"NOT_LEADER leader={leader}",
@@ -100,7 +103,7 @@ class Manager(farm_pb2_grpc.ManagerServicer):
             )
 
         job_id = "J-" + uuid.uuid4().hex[:8]
-        print(f"[manager] H2 got video job={job_id} "
+        event(self.event_log, "H2", f"got video job={job_id} "
               f"file={request.filename} bytes={len(request.data)}")
         self.store.create(job_id, request.filename, task_type)
         if self.log is not None and not self._replicate(
@@ -113,7 +116,8 @@ class Manager(farm_pb2_grpc.ManagerServicer):
         ack = None
         for worker_address in self.scheduler.order():
             self.store.assign(job_id, worker_address)
-            print(f"[manager] H3 scheduling job={job_id} -> worker at {worker_address}")
+            event(self.event_log, "H3",
+                  f"scheduling job={job_id} -> worker at {worker_address}")
             try:
                 with grpc.insecure_channel(
                     worker_address, options=config.CHANNEL_OPTIONS
@@ -129,19 +133,21 @@ class Manager(farm_pb2_grpc.ManagerServicer):
                         timeout=config.WORKER_ACK_TIMEOUT,
                     )
             except grpc.RpcError as error:
-                print(f"[manager] worker {worker_address} unavailable "
-                      f"({error.code().name}) - trying next")
+                self.event_log.info(f"worker {worker_address} unavailable "
+                                    f"({error.code().name}) - trying next")
                 ack = None
                 continue
             if ack.accepted:
                 break
-            print(f"[manager] worker {worker_address} refused job={job_id} - trying next")
+            self.event_log.info(
+                f"worker {worker_address} refused job={job_id} - trying next"
+            )
             ack = None
 
         if ack is None:
             return self._fail_reply(job_id, task_type, "no worker available")
         
-        print(f"[manager] H5 worker={ack.worker_id} got job={job_id} "
+        event(self.event_log, "H5", f"worker={ack.worker_id} got job={job_id} "
               f"task={task_type} (accepted={ack.accepted})")
                 
         if not self.store.wait_done(job_id, config.JOB_RESULT_TIMEOUT):
@@ -152,10 +158,11 @@ class Manager(farm_pb2_grpc.ManagerServicer):
         result = self.store.result(job_id)
         self.store.remove(job_id)
         self._log_done(job_id)
-        print(f"[manager] H8 sending result to client job={job_id} "
+        event(self.event_log, "H8", f"sending result to client job={job_id} "
               f"bytes={len(result.data)}")
         context.add_callback(
-            lambda: print(f"[manager] H9 delivered job={job_id} - happy path complete")
+            lambda: event(self.event_log, "H9",
+                          f"delivered job={job_id} - happy path complete")
         )
         return farm_pb2.UploadReply(
             job_id=job_id,
@@ -169,7 +176,7 @@ class Manager(farm_pb2_grpc.ManagerServicer):
         if not leader:
             return farm_pb2.ReportAck(ok=False)
         address = leader if ":" in leader else f"{leader}:{config.MANAGER_PORT}"
-        print(f"[manager] forwarding result job={request.job_id} to leader {address}")
+        self.event_log.info(f"forwarding result job={request.job_id} to leader {address}")
         try:
             with grpc.insecure_channel(
                 address, options=config.CHANNEL_OPTIONS
@@ -204,7 +211,7 @@ class Manager(farm_pb2_grpc.ManagerServicer):
     def ReportResult(self, request, context):
         if self.election is not None and self.election.state != LEADER:
             return self._forward_result(request)
-        print(f"[manager] H7 worker={request.worker_id} done job={request.job_id} "
+        event(self.event_log, "H7", f"worker={request.worker_id} done job={request.job_id} "
               f"bytes={len(request.data)}")
         accepted = self.store.complete(request.job_id, request)
         return farm_pb2.ReportAck(ok=accepted)
@@ -332,6 +339,7 @@ def build_election_node(transport=None, log=None):
     )
     
 def serve():
+    event_log = setup_logging("manager")
     server = grpc.server(
         futures.ThreadPoolExecutor(max_workers=10),
         options=config.CHANNEL_OPTIONS,
@@ -341,7 +349,7 @@ def serve():
     if config.ENABLE_ELECTION:
         log = ReplicatedLog(config.NODE_ID, len(other_managers()) + 1)
         election = build_election_node(GrpcTransport(log=log), log)
-    manager = Manager(election, log)
+    manager = Manager(election, log, event_log)
     if election:
         farm_pb2_grpc.add_RaftServicer_to_server(
             RaftService(election, log, manager.apply_committed), server
@@ -349,7 +357,7 @@ def serve():
     farm_pb2_grpc.add_ManagerServicer_to_server(manager, server)
     server.add_insecure_port(f"[::]:{config.MANAGER_PORT}")
     server.start()
-    print(f"[manager] listening on port {config.MANAGER_PORT}")
+    event_log.info(f"listening on port {config.MANAGER_PORT}")
     if election:
         election.start()
     if config.ENABLE_HEARTBEATS:
@@ -357,7 +365,7 @@ def serve():
     try:
         server.wait_for_termination()
     except KeyboardInterrupt:
-        print("[manager] received interrupt signal")
+        event_log.info("received interrupt signal")
         manager.monitor.stop()
         if election:
             election.stop()
