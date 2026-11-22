@@ -3,7 +3,7 @@ import grpc
 from protos import farm_pb2, farm_pb2_grpc
 from common import config
 
-def report_result(manager_address, job_id, data, detail) :
+def report_result(manager_address, job_id, data, detail, lamport=0) :
 
     with grpc.insecure_channel(
         manager_address,
@@ -17,6 +17,7 @@ def report_result(manager_address, job_id, data, detail) :
                 data=data,
                 detail=detail,
                 worker_id=config.WORKER_ID,
+                lamport=lamport,
             ),
             timeout=config.WORKER_ACK_TIMEOUT,
         )
