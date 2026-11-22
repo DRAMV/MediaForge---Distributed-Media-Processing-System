@@ -39,3 +39,7 @@ EXPOSE 50051
 #   worker:  command: python -m worker.worker
 #   client:  command: python -m client.client --file assets/sample.mp4 --manager manager:50051
 CMD ["python", "-m", "scheduler.node"]
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
