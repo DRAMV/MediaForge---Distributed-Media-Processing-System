@@ -1,7 +1,9 @@
+import logging
 import random
 import threading
 import time
 
+log = logging.getLogger(__name__)
 FOLLOWER = "FOLLOWER"
 CANDIDATE = "CANDIDATE"
 LEADER = "LEADER"
@@ -155,5 +157,8 @@ class ElectionNode:
 
     def _loop(self):
         while self._running:
-            self.tick()
+            try:
+                self.tick()
+            except Exception:
+                log.exception("election tick failed")   # keep the election alive
             time.sleep(0.05)
