@@ -9,6 +9,7 @@ from worker.manager_client import report_result
 
 from common import config
 from common.clock import LamportClock
+from common.logging_setup import setup_logging, event
 from dashboard.status_page import WorkerStatus, start_status_server
 
 
@@ -104,6 +105,8 @@ class WorkerService(farm_pb2_grpc.WorkerServicer):
 
 
 def serve():
+    log = setup_logging("worker")
+
     if config.WORKER_CONCURRENCY < 1:
         raise ValueError("FARM_WORKER_CONCURRENCY must be at least 1")
 
