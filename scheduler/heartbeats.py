@@ -35,7 +35,7 @@ class HeartbeatMonitor:
             now = self._clock()
             for worker_id, last in self._last_seen.items():
                 if (self._state[worker_id] == ALIVE) and (now-last > self.dead_after):
-                    self._state[worker_id] == DEAD
+                    self._state[worker_id] = DEAD
                     newly_dead.append(worker_id)
 
         if self._on_dead is not None:
