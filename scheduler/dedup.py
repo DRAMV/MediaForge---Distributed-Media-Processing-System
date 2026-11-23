@@ -45,11 +45,11 @@ class Dedup:
             if entry is None or entry.status == DONE:
                 return False
 
-        entry.status = DONE
-        entry.worker_id = worker_id
-        entry.detail = detail
-        entry.size = size
-        entry.completed_at = time.time()
+            entry.status = DONE
+            entry.worker_id = worker_id
+            entry.detail = detail
+            entry.size = size
+            entry.completed_at = time.time()
         return True
 
     def lookup(self, key):
