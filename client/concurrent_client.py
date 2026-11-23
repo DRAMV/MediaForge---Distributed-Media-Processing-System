@@ -1,5 +1,6 @@
 import argparse
 import concurrent.futures
+import logging
 import pathlib
 import sys
 import time
@@ -13,7 +14,7 @@ from protos import farm_pb2, farm_pb2_grpc
 # waits for a worker. ReportResult needs a free thread too, so stay below 10.
 MAX_SAFE_UPLOADS = 8
 
-log = None   # configured once in main(); shared by the upload threads
+log = logging.getLogger("client")
 
 
 def parse_args():
@@ -57,6 +58,7 @@ def upload_one(index, stub, filename, data, task, timeout, out_dir):  #returns a
         if reply.data:
             out_path = out_dir / f"{reply.job_id}_{filename}"
             out_path.write_bytes(reply.data)
+            result["bytes"] = len(reply.data)
             result["ok"] = True
 
     except grpc.RpcError as e:
