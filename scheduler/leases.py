@@ -31,13 +31,13 @@ class LeaseTable:
         with self._lock:
             attempt = self._attempts.get(job_id, 0) + 1
             self._attempts[job_id] = attempt
-            self._leases[job_id] = Lease(worker_id, attempt, self._clock + self.lease_time)
+            self._leases[job_id] = Lease(worker_id, attempt, self._clock + self.lease_time())
             return attempt
 
     def complete(self, job_id, worker_id): #True only is worker has a valid lease
         with self._lock:
             lease = self._leases.get(job_id)
-            if (lease is None or lease[worker_id] != worker_id):
+            if (lease is None or lease.worker_id != worker_id):
                 return False
 
             del self._leases[job_id]
@@ -46,10 +46,10 @@ class LeaseTable:
     def check(self): #Expire and return overdue leases.
         expired = []
         with self._lock:
-            now = self._clock
+            now = self._clock()
             for job_id, lease in list(self._leases.items()):
                 if now > lease.expires:
-                    del self.leases[job_id]
+                    del self._leases[job_id]
                     expired.append((job_id, lease.worker_id))
 
         self._fire(expired)
@@ -58,7 +58,7 @@ class LeaseTable:
     def release_worker(self, worker_id):
         released = []
         with self._lock:
-            for job_id, lease in self._leases.items():
+            for job_id, lease in list(self._leases.items()):
                 if worker_id == lease.worker_id:
                     del self._leases[job_id]
                     released.append((job_id, worker_id))
