@@ -1,19 +1,19 @@
 import argparse
 import concurrent.futures
+import logging
 import pathlib
 import sys
 import time
 
 import grpc
 from common import config
-from common.logging_setup import setup_logging, event
 from protos import farm_pb2, farm_pb2_grpc
 
 # The manager's gRPC pool has 10 threads and each UploadVideo holds one while it
 # waits for a worker. ReportResult needs a free thread too, so stay below 10.
 MAX_SAFE_UPLOADS = 8
 
-log = None   # configured once in main(); shared by the upload threads
+log = logging.getLogger("client")
 
 
 def parse_args():
@@ -25,42 +25,42 @@ def parse_args():
     p.add_argument("--timeout", type=float, default=config.CLIENT_RPC_TIMEOUT)
     p.add_argument("--task",
                    choices=("transcode", "thumbnail", "subtitles", "moderation"),
-                   help="task type for every upload, omit this to let the manager choose")
+                   help="task type for every upload; omit to let the manager choose")
     args = p.parse_args()
     if not 1 <= args.count <= MAX_SAFE_UPLOADS:
         p.error(f"--count must be between 1 and {MAX_SAFE_UPLOADS} "
                 f"(the manager's thread pool would starve above that)")
     return args
 
-def upload_one(index, stub, filename, data, task, timeout, out_dir):  #returns a dict for the summary table
+def upload_one(index, stub, filename, data, task, timeout, out_dir):
     result = {
-        "index": index,
-        "job_id": "-",
-        "ok": False,
+        "index": index, 
+        "job_id": "-", 
+        "ok": False, 
         "seconds": 0.0,
-        "bytes": 0,
-        "task": task or "-",
+        "bytes": 0, 
+        "task": task or "-", 
         "detail": ""
-    }
+        }
     start = time.perf_counter()
     log.info("upload #%d started", index)
+
     try:
         reply = stub.UploadVideo(
             farm_pb2.UploadRequest(filename=filename, data=data, task_type=task or ""),
-            timeout=timeout
-        )
-        
-        result["job_id"] = reply.job_id or ""
+            timeout=timeout)
+        result["job_id"] = reply.job_id or "-"
         result["task"] = reply.task_type or result["task"]
         result["detail"] = reply.detail
-
         if reply.data:
             out_path = out_dir / f"{reply.job_id}_{filename}"
             out_path.write_bytes(reply.data)
+            result["bytes"] = len(reply.data)
             result["ok"] = True
 
     except grpc.RpcError as e:
         result["detail"] = f"{e.code().name}: {e.details()}"
+
     except Exception as e:
         result["detail"] = f"{type(e).__name__}: {e}"
 
@@ -68,6 +68,7 @@ def upload_one(index, stub, filename, data, task, timeout, out_dir):  #returns a
     log.info("upload #%d %s in %.1fs", index, "done" if result["ok"] else "FAILED",
              result["seconds"])
     return result
+
 
 def print_table(results, wall):
     print()
@@ -81,10 +82,10 @@ def print_table(results, wall):
     print("-" * 92)
     print(f"{ok}/{len(results)} succeeded, total wall time {wall:.1f}s")
 
-def main():
-    global log
-    log = setup_logging("client")
 
+def main():
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [client] %(message)s",
+                        datefmt="%H:%M:%S")
     args = parse_args()
     path = pathlib.Path(args.file)
     if not path.is_file():
@@ -95,7 +96,7 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
 
     channel = grpc.insecure_channel(args.manager, options=config.CHANNEL_OPTIONS)
-    stub = farm_pb2_grpc.ManagerStub(channel)  # channels and stubs are thread-safe
+    stub = farm_pb2_grpc.ManagerStub(channel)
 
     log.info("firing %d parallel uploads of %s (%d bytes) at %s",
              args.count, path.name, len(data), args.manager)

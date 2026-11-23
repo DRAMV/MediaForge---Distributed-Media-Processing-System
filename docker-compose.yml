@@ -2,12 +2,13 @@
 # One shared image (see Dockerfile) -> manager + workers + a client tool.
 #
 #   Start the farm:   docker compose up --build
-#   Upload a video:   docker compose run --rm client python -m client.client samples/video.mp4 --manager manager:50051
+#   Upload a video:   mkdir -p samples && cp /path/to/any_video.mp4 samples/video.mp4
+#   docker compose run --rm client python -m client.client samples/video.mp4 --manager manager:50051
 #   Stop everything:  docker compose down
 #
 # High availability (3 managers with leader election, 2 workers):
 #   Start:  docker compose up --build manager-1 manager-2 manager-3 ha-worker-1 ha-worker-2
-#   Upload: python3 -m client.client samples/video.mp4 --manager localhost:50061
+#   Upload: python3 -m client.client /path/to/any_video.mp4 --manager localhost:50061
 #           (ports 50061/50062/50063 are manager-1/2/3; only the leader accepts)
 #   Kill the leader:  ./faults/kill_leader.sh
 #   Bring it back:    ./faults/restart_node.sh manager-1
@@ -18,6 +19,7 @@ x-farm: &farm
 
 x-ha-env: &ha-env
   FARM_ENABLE_ELECTION: "1"
+  FARM_ENABLE_HEARTBEATS: "1"
   FARM_PEERS: manager-1:50051,manager-2:50051,manager-3:50051
   FARM_WORKERS: ha-worker-1:50052,ha-worker-2:50052
 

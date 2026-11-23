@@ -12,7 +12,7 @@ from common.clock import LamportClock
 from common.logging_setup import setup_logging, event
 from protos import farm_pb2, farm_pb2_grpc
 from scheduler.election import ElectionNode, LEADER
-from scheduler.heartbeats import HeartbeatMonitor
+from scheduler.heartbeats import DEAD, HeartbeatMonitor
 from scheduler.replicated_log import ReplicatedLog
 from scheduler.scheduler_core import SchedulerCore
 from scheduler.state_store import JobStore
@@ -27,9 +27,15 @@ class Manager(farm_pb2_grpc.ManagerServicer):
         self.applied = 0                      # log entries already applied
         self._apply_lock = threading.Lock()
         self.store = JobStore()
-        self.scheduler = SchedulerCore(config.WORKER_ADDRESSES)
+        self.scheduler = SchedulerCore(config.WORKER_ADDRESSES, is_dead=self._worker_is_dead)
         self.clock = LamportClock(owner="manager")
         self.monitor = HeartbeatMonitor()
+
+    def _worker_is_dead(self, address):
+        """True when the heartbeat monitor says the worker at this address is DEAD."""
+        host = address.split(":")[0]
+        return any(worker_id == host and state == DEAD
+                   for worker_id, state, _ in self.monitor.snapshot())
 
     def apply_committed(self):
         """Copy newly committed log entries into this manager's own JobStore."""

@@ -96,8 +96,31 @@ def test_vote_refused_to_a_candidate_with_an_older_log():
     assert voter.handle_vote_request(7, "m3", 3, 2) == (7, True)
     print("PASS vote refused for an older log")
 
+def test_election_thread_survives_an_error():
+    class FlakyTransport:
+        def __init__(self):
+            self.calls = 0
+
+        def request_vote(self, peer, term, cand, last_index=0, last_term=0):
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("boom")      # one bad call
+            return None
+
+        def send_heartbeat(self, peer, term, leader):
+            return None
+
+    transport = FlakyTransport()
+    node = ElectionNode("m1", ["m2"], transport, timeout_range=(0.05, 0.1))
+    node.start()
+    time.sleep(1)
+    node.stop()
+    assert transport.calls >= 3          # it kept trying after the error
+    print("PASS election thread survives an error")
+
 if __name__ == "__main__":
     test_one_leader_elected()
     test_new_leader_after_crash()
     test_no_leader_without_majority()
     test_vote_refused_to_a_candidate_with_an_older_log()
+    test_election_thread_survives_an_error()
