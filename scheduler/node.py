@@ -16,6 +16,8 @@ from scheduler.heartbeats import DEAD, HeartbeatMonitor
 from scheduler.replicated_log import ReplicatedLog
 from scheduler.scheduler_core import SchedulerCore
 from scheduler.state_store import JobStore
+from scheduler.leases import LeaseTable
+from scheduler.dedup import Dedup, DONE
 
 REPLICATION_TIMEOUT = 5.0   # seconds to wait for a majority to copy a job
 
@@ -30,6 +32,8 @@ class Manager(farm_pb2_grpc.ManagerServicer):
         self.scheduler = SchedulerCore(config.WORKER_ADDRESSES, is_dead=self._worker_is_dead)
         self.clock = LamportClock(owner="manager")
         self.monitor = HeartbeatMonitor()
+        self.leases = (LeaseTable(on_expire=self._lease_expired) if config.ENABLE_LEASES else None)
+        self.dedup = Dedup() if config.ENABLE_DEDUP else None
 
     def _worker_is_dead(self, address):
         """True when the heartbeat monitor says the worker at this address is DEAD."""
@@ -79,15 +83,22 @@ class Manager(farm_pb2_grpc.ManagerServicer):
                 return task
         return config.DEFAULT_TASK
     
-    def _log_done(self, job_id):
-        """Tell every manager this job is finished so they can forget it."""
-        if self.log is not None:
-            self.log.append(self.election.term, {"op": "JOB_DONE", "job_id": job_id})
+    def _lease_expired(self, job_id, worker_id):
+        """Lease ran out with no result -> wake the waiting UploadVideo with a failure.
+        (True silent requeue needs the job payload in the replicated log — M2 follow-up.)"""
+        self.event_log.info(f"lease expired job={job_id} worker={worker_id} -> failing job")
+        self.store.fail(job_id)
 
-    def _fail_reply(self, job_id, task_type, detail):
+    def _fail_reply(self, job_id, task_type, detail, dedup_key=None):
         self.store.fail(job_id)
         self.store.remove(job_id)
         self._log_done(job_id)
+        if self.dedup is not None and dedup_key:
+            self.dedup.fail(dedup_key)
+        self.event_log.info(f"job={job_id} FAILED: {detail}")
+        return farm_pb2.UploadReply(
+            job_id=job_id, data=b"", detail=detail, task_type=task_type
+        )
         self.event_log.info(f"job={job_id} FAILED: {detail}")
         return farm_pb2.UploadReply(
             job_id=job_id, data=b"", detail=detail, task_type=task_type
@@ -108,6 +119,20 @@ class Manager(farm_pb2_grpc.ManagerServicer):
                 f"Unknown task type: {task_type}",
             )
 
+        dedup_key = None
+        if self.dedup is not None:
+            dedup_key = hashlib.sha256(request.data).hexdigest()
+            fresh, existing = self.dedup.claim(dedup_key)
+            if not fresh and existing.status == DONE:
+                self.event_log.info(f"dedup hit: {request.filename} "
+                                    f"already processed ({existing.detail})")
+                return farm_pb2.UploadReply(
+                    job_id="-", data=b"", task_type=task_type,
+                    detail=f"duplicate input: identical file already "
+                        f"processed ({existing.detail})",
+                )
+        # a concurrent IN_PROGRESS duplicate still gets processed (v1 behaviour)
+
         job_id = "J-" + uuid.uuid4().hex[:8]
         event(self.event_log, "H2", f"got video job={job_id} "
               f"file={request.filename} bytes={len(request.data)}")
@@ -117,6 +142,7 @@ class Manager(farm_pb2_grpc.ManagerServicer):
             return self._fail_reply(
                 job_id, task_type,
                 "could not copy the job to a majority of managers",
+                dedup_key=dedup_key
             )
             
         ack = None
@@ -148,6 +174,8 @@ class Manager(farm_pb2_grpc.ManagerServicer):
                         f"clock job={job_id} sent lamport={job.lamport} "
                         f"ack lamport={ack.lamport}"
                     )
+                if self.leases is not None:
+                    self.leases.grant(job_id, ack.worker_id)
                 break
             self.event_log.info(
                 f"worker {worker_address} refused job={job_id} - trying next"
@@ -155,17 +183,24 @@ class Manager(farm_pb2_grpc.ManagerServicer):
             ack = None
 
         if ack is None:
-            return self._fail_reply(job_id, task_type, "no worker available")
+            return self._fail_reply(job_id, task_type, "no worker available", dedup_key=dedup_key)
         
         event(self.event_log, "H5", f"worker={ack.worker_id} got job={job_id} "
               f"task={task_type} (accepted={ack.accepted})")
                 
         if not self.store.wait_done(job_id, config.JOB_RESULT_TIMEOUT):
             return self._fail_reply(
-                job_id, task_type, "timeout waiting for worker to finish job"
+                job_id, task_type, "timeout waiting for worker to finish job",
+                dedup_key=dedup_key
             )
 
         result = self.store.result(job_id)
+        if self.dedup is not None and dedup_key:
+            self.dedup.complete(dedup_key, ack.worker_id, f"job={job_id}",
+                                len(result.data))
+        if self.leases is not None:
+            self.leases.complete(job_id, ack.worker_id)
+
         self.store.remove(job_id)
         self._log_done(job_id)
         event(self.event_log, "H8", f"sending result to client job={job_id} "
@@ -229,6 +264,9 @@ class Manager(farm_pb2_grpc.ManagerServicer):
         event(self.event_log, "H7", f"worker={request.worker_id} done job={request.job_id} "
               f"bytes={len(request.data)}")
         accepted = self.store.complete(request.job_id, request)
+        if self.leases is not None and accepted:
+            self.leases.complete(request.job_id, request.worker_id)
+        
         return farm_pb2.ReportAck(ok=accepted)
 
 class RaftService(farm_pb2_grpc.RaftServicer):
@@ -377,11 +415,15 @@ def serve():
         election.start()
     if config.ENABLE_HEARTBEATS:
         manager.monitor.start()
+    if config.ENABLE_LEASES and manager.leases is not None:
+        manager.leases.start()
     try:
         server.wait_for_termination()
     except KeyboardInterrupt:
         event_log.info("received interrupt signal")
         manager.monitor.stop()
+        if manager.leases is not None:
+            manager.leases.stop()
         if election:
             election.stop()
         server.stop(grace=config.GRACE_SECONDS)

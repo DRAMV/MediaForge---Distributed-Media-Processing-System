@@ -46,7 +46,7 @@ class HeartbeatMonitor:
 
     def alive_workers(self):
         with self._lock:
-            return (worker_id for worker_id, state in self._state.items() if state == ALIVE)
+            return [worker_id for worker_id, state in self._state.items() if state == ALIVE]
 
 
     def snapshot(self):

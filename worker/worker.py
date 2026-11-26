@@ -1,5 +1,6 @@
 import grpc
 import threading
+import logging
 
 from concurrent import futures
 
@@ -22,6 +23,7 @@ class WorkerService(farm_pb2_grpc.WorkerServicer):
         self.pool = pool
         self.status = status
         self.clock = LamportClock(owner=config.WORKER_ID)
+        self._hb_stop = threading.Event()
     
     def SubmitJob(self, request, context):
         task_type = request.task_type or config.DEFAULT_TASK
@@ -103,6 +105,36 @@ class WorkerService(farm_pb2_grpc.WorkerServicer):
             f"{state} job={job.job_id}: {detail}"
         )
 
+    def start_heartbeat_sender(self):
+        """Ping the manager so its liveness monitor can track this worker."""
+        if not config.ENABLE_HEARTBEATS:
+            return None
+
+        def loop():
+            log = logging.getLogger("worker")
+            channel = grpc.insecure_channel(
+                config.MANAGER_ADDRESS, options=config.CHANNEL_OPTIONS)
+            stub = farm_pb2_grpc.ManagerStub(channel)
+            log.info("heartbeats -> %s every %ss",
+                     config.MANAGER_ADDRESS, config.HEARTBEAT_INTERVAL)
+            while not self._hb_stop.wait(config.HEARTBEAT_INTERVAL):
+                try:
+                    ack = stub.Heartbeat(
+                        farm_pb2.HeartbeatRequest(
+                            worker_id=config.WORKER_ID,
+                            lamport=self.clock.send() if config.ENABLE_CLOCKS else 0,
+                        ),
+                        timeout=config.HEARTBEAT_INTERVAL,
+                    )
+                    if config.ENABLE_CLOCKS and ack.lamport:
+                        self.clock.recv(ack.lamport)
+                except grpc.RpcError as e:
+                    log.info("heartbeat not delivered (%s) - will retry", e.code().name)
+            channel.close()
+
+        t = threading.Thread(target=loop, name="heartbeat-sender", daemon=True)
+        t.start()
+        return t
 
 def serve():
     log = setup_logging("worker")
@@ -138,9 +170,12 @@ def serve():
             )
 
         page = start_status_server(status, config.STATUS_PORT)
+        service = WorkerService(pool, status)
+        farm_pb2_grpc.add_WorkerServicer_to_server(service, server)
 
         try:
             server.start()
+            hb_thread = service.start_heartbeat_sender()
 
             print(
                 f"[worker:{config.WORKER_ID}]"
@@ -158,6 +193,7 @@ def serve():
             print(f"[worker:{config.WORKER_ID}] shutting down")
 
         finally:
+            service._hb_stop.set()
             server.stop(config.GRACE_SECONDS).wait()
             page.shutdown()
             page.server_close()

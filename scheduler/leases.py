@@ -31,7 +31,7 @@ class LeaseTable:
         with self._lock:
             attempt = self._attempts.get(job_id, 0) + 1
             self._attempts[job_id] = attempt
-            self._leases[job_id] = Lease(worker_id, attempt, self._clock() + self.lease_time())
+            self._leases[job_id] = Lease(worker_id, attempt, self._clock() + self.lease_time)
             return attempt
 
     def complete(self, job_id, worker_id): #True only is worker has a valid lease
@@ -62,9 +62,9 @@ class LeaseTable:
                 if worker_id == lease.worker_id:
                     del self._leases[job_id]
                     released.append((job_id, worker_id))
-                    
-            self._fire(released)
-            return [job_id for job_id, _ in released]
+
+        self._fire(released)
+        return [job_id for job_id, _ in released]
 
     def get_holder(self, job_id):
         with self._lock:
