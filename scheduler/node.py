@@ -3,6 +3,7 @@ import uuid
 import json
 import logging
 import time
+import hashlib
 from concurrent import futures
 
 import grpc
@@ -89,16 +90,17 @@ class Manager(farm_pb2_grpc.ManagerServicer):
         self.event_log.info(f"lease expired job={job_id} worker={worker_id} -> failing job")
         self.store.fail(job_id)
 
+    def _log_done(self, job_id):
+        """Tell every manager this job is finished so they can forget it."""
+        if self.log is not None:
+            self.log.append(self.election.term, {"op": "JOB_DONE", "job_id": job_id})
+
     def _fail_reply(self, job_id, task_type, detail, dedup_key=None):
         self.store.fail(job_id)
         self.store.remove(job_id)
         self._log_done(job_id)
         if self.dedup is not None and dedup_key:
             self.dedup.fail(dedup_key)
-        self.event_log.info(f"job={job_id} FAILED: {detail}")
-        return farm_pb2.UploadReply(
-            job_id=job_id, data=b"", detail=detail, task_type=task_type
-        )
         self.event_log.info(f"job={job_id} FAILED: {detail}")
         return farm_pb2.UploadReply(
             job_id=job_id, data=b"", detail=detail, task_type=task_type
