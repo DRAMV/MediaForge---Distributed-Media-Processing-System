@@ -8,6 +8,7 @@ import time
 import grpc
 from common import config
 from protos import farm_pb2, farm_pb2_grpc
+from common.logging_setup import setup_logging
 
 # The manager's gRPC pool has 10 threads and each UploadVideo holds one while it
 # waits for a worker. ReportResult needs a free thread too, so stay below 10.
@@ -84,8 +85,7 @@ def print_table(results, wall):
 
 
 def main():
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [client] %(message)s",
-                        datefmt="%H:%M:%S")
+    setup_logging("client")
     args = parse_args()
     path = pathlib.Path(args.file)
     if not path.is_file():

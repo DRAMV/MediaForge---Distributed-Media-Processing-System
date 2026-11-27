@@ -56,3 +56,9 @@ class Dedup:
         with self._lock:
             entry = self._entries.get(key)
             return replace(entry) if entry is not None else None
+
+    def fail(self, key):
+        if not self.enabled:
+            return False
+        with self._lock:
+            return self._entries.pop(key, None) is not None
