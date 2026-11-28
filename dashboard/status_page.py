@@ -205,7 +205,7 @@ def start_status_server(status, port):
         def log_message(self, *args):
             pass    
 
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
 
     threading.Thread(
         target=server.serve_forever,

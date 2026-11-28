@@ -93,13 +93,19 @@ services:
     profiles: ["ha"]
     command: python -m worker.worker
     environment:
+      <<: *ha-env
       FARM_WORKER_ID: ha-worker-1
       FARM_MANAGER_ADDRESS: manager-1:50051
+    ports:
+      - "127.0.0.1:8081:8080"
 
   ha-worker-2:
     <<: *farm
     profiles: ["ha"]
     command: python -m worker.worker
     environment:
+      <<: *ha-env
       FARM_WORKER_ID: ha-worker-2
       FARM_MANAGER_ADDRESS: manager-1:50051
+    ports:
+      - "127.0.0.1:8082:8080"

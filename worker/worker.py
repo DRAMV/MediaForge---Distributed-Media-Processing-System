@@ -5,17 +5,13 @@ from concurrent import futures
 
 from protos import farm_pb2, farm_pb2_grpc
 from worker.processor import process_job, TASKS
-from worker.manager_client import report_result
+from worker.manager_client import report_result,heartbeat_loop
 
 from common import config
 from common.clock import LamportClock
 from common.logging_setup import setup_logging, event
 from dashboard.status_page import WorkerStatus, start_status_server
 
-
-MANAGER_ADDRESS = "localhost:50051"
-WORKER_PORT = 50052
-MAX_MSG = 64 * 1024 * 1024
 
 class WorkerService(farm_pb2_grpc.WorkerServicer):
     def __init__(self, pool, status):
@@ -37,7 +33,7 @@ class WorkerService(farm_pb2_grpc.WorkerServicer):
         self.status.update(request, "QUEUED")
 
         print(
-            f"[worker:{config.WORKER_ID}]"
+            f"[worker:{config.WORKER_ID}] "
             f"accepted job={request.job_id} task={task_type}"
         )
         self.pool.submit(self.process_in_background, request)
@@ -53,7 +49,7 @@ class WorkerService(farm_pb2_grpc.WorkerServicer):
     def process_in_background(self, job):
         self.status.update(job, "RUNNING")
         print(
-            f"[worker:{config.WORKER_ID}]"
+            f"[worker:{config.WORKER_ID}] "
             f"started job={job.job_id}"
         )
 
@@ -99,7 +95,7 @@ class WorkerService(farm_pb2_grpc.WorkerServicer):
         self.status.update(job, state, detail)
 
         print(
-            f"[worker:{config.WORKER_ID}]"
+            f"[worker:{config.WORKER_ID}] "
             f"{state} job={job.job_id}: {detail}"
         )
 
@@ -123,10 +119,8 @@ def serve():
             options=config.CHANNEL_OPTIONS,
         )
 
-        farm_pb2_grpc.add_WorkerServicer_to_server(
-            WorkerService(pool, status),
-            server,
-        )
+        worker = WorkerService(pool, status)
+        farm_pb2_grpc.add_WorkerServicer_to_server(worker, server)
 
         bound_port = server.add_insecure_port(
             f"[::]:{config.WORKER_PORT}"
@@ -139,16 +133,28 @@ def serve():
 
         page = start_status_server(status, config.STATUS_PORT)
 
+        heartbeat_stop = threading.Event()
+        heartbeat_thread = None
+
         try:
             server.start()
 
+            if config.ENABLE_HEARTBEATS:
+                heartbeat_thread = threading.Thread(
+                    target=heartbeat_loop,
+                    args=(heartbeat_stop, worker.clock, log),
+                    name="worker-heartbeat",
+                    daemon=True,
+                )
+                heartbeat_thread.start()
+
             print(
-                f"[worker:{config.WORKER_ID}]"
-                f"lsitening on port {config.WORKER_PORT}"
+                f"[worker:{config.WORKER_ID}] "
+                f"listening on port {config.WORKER_PORT} "
                 f"concurrency={config.WORKER_CONCURRENCY}"
             )
             print(
-                f"[worker:{config.WORKER_ID}]"
+                f"[worker:{config.WORKER_ID}] "
                 f"status: http://localhost:{config.STATUS_PORT}"
             )
 
@@ -158,6 +164,10 @@ def serve():
             print(f"[worker:{config.WORKER_ID}] shutting down")
 
         finally:
+            heartbeat_stop.set()
+            if heartbeat_thread is not None:
+                heartbeat_thread.join()
+
             server.stop(config.GRACE_SECONDS).wait()
             page.shutdown()
             page.server_close()
